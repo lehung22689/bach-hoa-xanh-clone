@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link'; // ĐÃ KÍCH HOẠT LẠI Link chuẩn của Next.js
 import { Search, ShoppingCart, MapPin, Menu, ChevronRight, Phone, Clock, ShieldCheck, Ticket } from 'lucide-react';
 
 // --- MOCK DATA: Danh mục hiển thị trên giao diện ---
@@ -46,9 +47,10 @@ const Header = ({ cartCount }) => (
           </button>
         </div>
 
-        {/* Cart & Login */}
+        {/* Cart */}
         <div className="flex items-center space-x-4">
-          <div className="relative cursor-pointer bg-[#00703c] p-2.5 rounded-lg flex items-center space-x-2 hover:bg-[#006030]">
+          {/* Đã sửa href="/cart" để Next.js tự động xử lý chuyển trang mượt mà */}
+          <Link href="/cart" className="relative cursor-pointer bg-[#00703c] p-2.5 rounded-lg flex items-center space-x-2 hover:bg-[#006030]">
             <ShoppingCart size={22} />
             <span className="hidden sm:inline font-medium">Giỏ hàng</span>
             {cartCount > 0 && (
@@ -56,7 +58,7 @@ const Header = ({ cartCount }) => (
                 {cartCount}
               </span>
             )}
-          </div>
+          </Link>
         </div>
       </div>
     </div>
@@ -173,13 +175,12 @@ const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
 };
 
 // 4. Main App Component
-// 4. Main App Component
 export default function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- 1. THÊM MỚI: Lấy giỏ hàng từ máy tính khách hàng khi vừa vào web ---
+  // --- 1. Lấy giỏ hàng từ máy tính khách hàng khi vừa vào web ---
   useEffect(() => {
     const savedCart = localStorage.getItem('lanHaoCart');
     if (savedCart) {
@@ -189,42 +190,37 @@ export default function App() {
         console.error("Lỗi đọc dữ liệu giỏ hàng:", error);
       }
     }
-  }, []); // Mảng rỗng [] nghĩa là chỉ chạy 1 lần duy nhất khi web vừa load xong
+  }, []);
 
-  // --- 2. THÊM MỚI: Lưu giỏ hàng vào máy tính mỗi khi biến 'cart' thay đổi ---
+  // --- 2. Lưu giỏ hàng vào máy tính mỗi khi biến 'cart' thay đổi ---
   useEffect(() => {
-    // Lưu ý: Lần chạy đầu tiên cart là [], nên ta không lưu mảng rỗng đè lên dữ liệu cũ
-    // Nhưng để đơn giản và chuẩn xác nhất cho React, ta cứ lưu stringify của cart
-    // Tuy nhiên, để tránh lỗi ghi đè mảng rỗng lúc mới load trang do bất đồng bộ,
-    // ta nên đặt một điều kiện nhỏ:
     if (cart.length > 0) {
       localStorage.setItem('lanHaoCart', JSON.stringify(cart));
     } else {
-      // Nếu giỏ hàng trống, xóa luôn key trong localStorage cho sạch
       localStorage.removeItem('lanHaoCart');
     }
-  }, [cart]); // [cart] nghĩa là hàm này sẽ tự động chạy mỗi khi giỏ hàng có sự thay đổi
+  }, [cart]);
 
-useEffect(() => {
+  // --- 3. Lấy sản phẩm từ WooCommerce ---
+  useEffect(() => {
+    let isMounted = true; // Tránh lỗi rò rỉ bộ nhớ khi chuyển trang nhanh
+    
     const fetchProducts = async () => {
+      setLoading(true);
       try {
-        const wpDomain = 'https://bachhoalanhao.com';
+        // Đã sửa lại chuỗi tên miền chuẩn xác, loại bỏ định dạng của Markdown
+        const wpDomain = '[https://bachhoalanhao.com](https://bachhoalanhao.com)';
         const consumerKey = 'ck_efbecb883c9732a5235e08233b5cf7944c46bc46';
         const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
 
-        // CÁCH MỚI: Đưa trực tiếp Key vào URL thay vì dùng headers (Tránh việc Tinohost chặn Header Basic Auth)
         const apiUrl = `${wpDomain}/wp-json/wc/v3/products?per_page=100&consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`;
         
         const response = await fetch(apiUrl);
         const data = await response.json();
         
-        // In ra để kiểm tra
-        console.log("📦 Dữ liệu từ WooCommerce đổ về:", data);
-
-        // BẮT LỖI: Nếu API trả về chuỗi báo lỗi (không phải là mảng dữ liệu)
         if (!Array.isArray(data)) {
            console.error("❌ Lỗi từ WordPress (Có thể sai Key hoặc chặn truy cập):", data);
-           setLoading(false);
+           if (isMounted) setLoading(false);
            return;
         }
         
@@ -238,15 +234,32 @@ useEffect(() => {
           on_sale: item.on_sale || false,
         }));
 
-        setProducts(formattedProducts);
-        setLoading(false);
+        if (isMounted) {
+            setProducts(formattedProducts);
+            setLoading(false);
+        }
       } catch (error) {
         console.error("❌ Lỗi mạng hoặc lỗi CORS:", error);
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchProducts();
+    
+    // Lắng nghe sự kiện 'pageshow' để chạy lại fetch nếu trang được load từ BFCache (khi bấm Back)
+    const handlePageShow = (event) => {
+      if (event.persisted) {
+        console.log("Trang được load từ BFCache (nhấn nút Back), đang tải lại dữ liệu...");
+        fetchProducts();
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    
+    return () => {
+        isMounted = false;
+        window.removeEventListener('pageshow', handlePageShow);
+    };
   }, []);
 
   const handleAddQuantity = (product) => {
@@ -274,8 +287,7 @@ useEffect(() => {
 
   const flashSaleProducts = products.filter(p => p.on_sale).slice(0, 5);
   
-  // Logic lọc linh hoạt: Kiểm tra xem có bất kỳ danh mục nào khớp với tên mong muốn không
-// Lọc tạm các sản phẩm có chữ SỮA hoặc SNACK để test
+  // Logic lọc sản phẩm Sữa hoặc Snack
   const meatProducts = products.filter(p => 
     p.categories && p.categories.some(cat => 
         cat.name.toLowerCase().includes('sữa') || 
@@ -333,7 +345,7 @@ useEffect(() => {
           <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-[#008b4b]">
             <div className="p-4 border-b flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-800 uppercase flex items-center">
-                <span className="text-2xl mr-2">🥩</span> Thịt, cá, hải sản tươi
+                <span className="text-2xl mr-2">🥩</span> Sữa, Snack
               </h2>
             </div>
             <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -347,7 +359,7 @@ useEffect(() => {
                 />
               )) : (
                 <div className="col-span-full py-10 text-center text-gray-400 italic">
-                  Đang đồng bộ dữ liệu sản phẩm từ hệ thống...
+                  {loading ? 'Đang tải dữ liệu sản phẩm từ hệ thống...' : 'Không có sản phẩm nào thuộc danh mục này.'}
                 </div>
               )}
             </div>
