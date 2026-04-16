@@ -209,7 +209,7 @@ export default function App() {
       setLoading(true);
       try {
         // Đã sửa lại chuỗi tên miền chuẩn xác, loại bỏ định dạng của Markdown
-        const wpDomain = '[https://bachhoalanhao.com](https://bachhoalanhao.com)';
+        const wpDomain = 'https://bachhoalanhao.com';
         const consumerKey = 'ck_efbecb883c9732a5235e08233b5cf7944c46bc46';
         const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
 
