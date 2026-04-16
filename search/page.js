@@ -1,12 +1,44 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { Search, ShoppingCart, MapPin, Menu, ChevronRight, X } from 'lucide-react';
+// import Link from 'next/link';
+// import { useRouter } from 'next/navigation';
+import { Search, ShoppingCart, MapPin, Menu, ChevronRight, X, SearchX } from 'lucide-react';
 
+// Giả lập thẻ Link và useRouter của Next.js để có thể xem trước trực tiếp trên môi trường này
+const Link = ({ href, children, className, onClick }) => {
+  const handleClick = (e) => {
+    if (onClick) onClick(e);
+    // Ngăn chặn lỗi định dạng URL khi chạy trên môi trường giả lập (Canvas)
+    if (window.location.protocol === 'blob:' && href.startsWith('/')) {
+      e.preventDefault();
+      if (href.includes('?q=')) {
+        const q = href.split('?q=')[1] || '';
+        window.dispatchEvent(new CustomEvent('mock-navigate', { detail: decodeURIComponent(q) }));
+      }
+    }
+  };
+  return <a href={href} className={className} onClick={handleClick}>{children}</a>;
+};
 
+const useRouter = () => ({
+  push: (url) => {
+    try {
+      if (window.location.protocol === 'blob:') {
+        if (url.includes('?q=')) {
+          const q = url.split('?q=')[1] || '';
+          window.dispatchEvent(new CustomEvent('mock-navigate', { detail: decodeURIComponent(q) }));
+        }
+      } else {
+        window.location.href = url;
+      }
+    } catch (error) {
+      console.log("Đã bỏ qua lỗi điều hướng trong môi trường xem trước.");
+    }
+  }
+});
 
-// --- MOCK DATA: Danh mục hiển thị trên giao diện ---
+// --- MOCK DATA: Danh mục ---
 const mockCategories = [
   { id: 1, name: 'Thịt, cá, hải sản', icon: '🥩' },
   { id: 2, name: 'Rau, củ, trái cây', icon: '🥬' },
@@ -19,32 +51,25 @@ const mockCategories = [
 ];
 
 // --- COMPONENTS ---
-
-// 1. Header Component (Đã nâng cấp chức năng tìm kiếm)
 const Header = ({ cartCount, allProducts }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchRef = useRef(null);
+  const router = useRouter();
 
-  // Xử lý khi người dùng gõ từ khóa
   useEffect(() => {
     if (searchQuery.trim().length === 0) {
       setSearchResults([]);
       return;
     }
-
-    // Lọc sản phẩm có tên chứa từ khóa (không phân biệt hoa thường)
     const keyword = searchQuery.toLowerCase();
     const results = allProducts.filter(product => 
       product.name.toLowerCase().includes(keyword)
     );
-    
-    // Chỉ lấy tối đa 5 kết quả đầu tiên để dropdown không bị quá dài
     setSearchResults(results.slice(0, 5));
   }, [searchQuery, allProducts]);
 
-  // Xử lý ẩn dropdown khi click ra ngoài ô tìm kiếm
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
@@ -55,23 +80,27 @@ const Header = ({ cartCount, allProducts }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleSearch = () => {
+    if (searchQuery.trim() !== '') {
+      setIsSearchFocused(false);
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
+
   return (
     <header className="bg-[#008b4b] text-white sticky top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between py-3">
-          {/* Logo */}
-          <div className="flex items-center space-x-2 font-bold text-2xl tracking-tighter cursor-pointer">
+          <Link href="/" className="flex items-center space-x-2 font-bold text-2xl tracking-tighter cursor-pointer">
             <div className="bg-yellow-400 text-green-800 p-1 rounded-md">BÁCH HÓA</div>
             <span>LAN HẢO</span>
-          </div>
+          </Link>
 
-          {/* Location Selector */}
           <div className="hidden md:flex items-center space-x-1 bg-[#00703c] px-3 py-2 rounded-lg cursor-pointer hover:bg-[#006030] text-sm">
             <MapPin size={16} />
             <span>Giao tới: <strong className="text-yellow-300">Dĩ An, Bình Dương</strong></span>
           </div>
 
-          {/* KHU VỰC TÌM KIẾM (Search Bar) */}
           <div className="flex-1 max-w-2xl mx-4 relative hidden sm:block" ref={searchRef}>
             <div className="relative">
               <input
@@ -81,6 +110,9 @@ const Header = ({ cartCount, allProducts }) => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setIsSearchFocused(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSearch();
+                }}
               />
               
               {searchQuery && (
@@ -92,12 +124,14 @@ const Header = ({ cartCount, allProducts }) => {
                 </button>
               )}
 
-              <button className="absolute right-1 top-1 bg-gray-100 p-1.5 rounded-full text-gray-600 hover:bg-gray-200">
+              <button 
+                onClick={handleSearch}
+                className="absolute right-1 top-1 bg-gray-100 p-1.5 rounded-full text-gray-600 hover:bg-gray-200"
+              >
                 <Search size={20} />
               </button>
             </div>
 
-            {/* BẢNG KẾT QUẢ TÌM KIẾM (Dropdown) */}
             {isSearchFocused && searchQuery.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
                 {searchResults.length > 0 ? (
@@ -124,9 +158,13 @@ const Header = ({ cartCount, allProducts }) => {
                       </li>
                     ))}
                     <li className="p-2 text-center bg-gray-50 border-t">
-                      <button className="text-[#008b4b] text-sm font-bold hover:underline">
+                      <Link 
+                        href={`/search?q=${encodeURIComponent(searchQuery)}`}
+                        onClick={() => setIsSearchFocused(false)}
+                        className="text-[#008b4b] text-sm font-bold hover:underline block w-full"
+                      >
                         Xem tất cả kết quả cho "{searchQuery}"
-                      </button>
+                      </Link>
                     </li>
                   </ul>
                 ) : (
@@ -138,7 +176,6 @@ const Header = ({ cartCount, allProducts }) => {
             )}
           </div>
 
-          {/* Cart */}
           <div className="flex items-center space-x-4">
             <Link href="/cart" className="relative cursor-pointer bg-[#00703c] p-2.5 rounded-lg flex items-center space-x-2 hover:bg-[#006030]">
               <ShoppingCart size={22} />
@@ -156,7 +193,6 @@ const Header = ({ cartCount, allProducts }) => {
   );
 };
 
-// 2. Navigation Categories (Mobile)
 const MobileCategoryNav = () => (
   <nav className="bg-white shadow-sm border-b md:hidden">
     <div className="max-w-7xl mx-auto px-4 overflow-x-auto no-scrollbar">
@@ -175,7 +211,6 @@ const MobileCategoryNav = () => (
   </nav>
 );
 
-// 2.5 Desktop Sidebar
 const DesktopSidebar = () => (
   <aside className="hidden md:block w-60 lg:w-64 flex-shrink-0 relative">
     <div className="bg-white rounded-xl shadow-sm overflow-hidden sticky top-[88px]">
@@ -196,7 +231,6 @@ const DesktopSidebar = () => (
   </aside>
 );
 
-// 3. Product Card Component
 const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
   const discountPercent = product.on_sale && product.regular_price > product.price
     ? Math.round(((product.regular_price - product.price) / product.regular_price) * 100) 
@@ -265,25 +299,23 @@ const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
   );
 };
 
-// 4. Main App Component
-export default function App() {
-  const [products, setProducts] = useState([]);
+// 4. Main Search Page Component
+export default function SearchPage() {
+  const [allProducts, setAllProducts] = useState([]);
+  const [displayedProducts, setDisplayedProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchKeyword, setSearchKeyword] = useState('');
 
-  // --- 1. Lấy giỏ hàng từ máy tính khách hàng khi vừa vào web ---
+  // Lấy giỏ hàng
   useEffect(() => {
     const savedCart = localStorage.getItem('lanHaoCart');
     if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch (error) {
-        console.error("Lỗi đọc dữ liệu giỏ hàng:", error);
-      }
+      try { setCart(JSON.parse(savedCart)); } catch (e) {}
     }
   }, []);
 
-  // --- 2. Lưu giỏ hàng vào máy tính mỗi khi biến 'cart' thay đổi ---
+  // Lưu giỏ hàng
   useEffect(() => {
     if (cart.length > 0) {
       localStorage.setItem('lanHaoCart', JSON.stringify(cart));
@@ -292,10 +324,15 @@ export default function App() {
     }
   }, [cart]);
 
-  // --- 3. Lấy sản phẩm từ WooCommerce ---
+  // Lấy danh sách sản phẩm và lọc theo URL ban đầu
   useEffect(() => {
     let isMounted = true; 
     
+    // Lấy từ khóa (q) từ URL của trình duyệt
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q') || '';
+    setSearchKeyword(q);
+
     const fetchProducts = async () => {
       setLoading(true);
       try {
@@ -304,51 +341,59 @@ export default function App() {
         const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
 
         const apiUrl = `${wpDomain}/wp-json/wc/v3/products?per_page=100&consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`;
-        
         const response = await fetch(apiUrl);
         const data = await response.json();
         
-        if (!Array.isArray(data)) {
-           console.error("❌ Lỗi từ WordPress (Có thể sai Key hoặc chặn truy cập):", data);
-           if (isMounted) setLoading(false);
-           return;
-        }
-        
-        const formattedProducts = data.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price ? parseInt(item.price) : 0,
-          regular_price: item.regular_price ? parseInt(item.regular_price) : 0,
-          images: item.images || [],
-          categories: item.categories || [],
-          on_sale: item.on_sale || false,
-        }));
+        if (Array.isArray(data) && isMounted) {
+          const formattedProducts = data.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.price ? parseInt(item.price) : 0,
+            regular_price: item.regular_price ? parseInt(item.regular_price) : 0,
+            images: item.images || [],
+            categories: item.categories || [],
+            on_sale: item.on_sale || false,
+          }));
 
-        if (isMounted) {
-            setProducts(formattedProducts);
-            setLoading(false);
+          setAllProducts(formattedProducts);
+
+          // Lọc sản phẩm theo từ khóa
+          if (q.trim() !== '') {
+            const filtered = formattedProducts.filter(p => 
+              p.name.toLowerCase().includes(q.toLowerCase())
+            );
+            setDisplayedProducts(filtered);
+          } else {
+            setDisplayedProducts(formattedProducts);
+          }
+          setLoading(false);
         }
       } catch (error) {
-        console.error("❌ Lỗi mạng hoặc lỗi CORS:", error);
         if (isMounted) setLoading(false);
       }
     };
 
     fetchProducts();
     
-    const handlePageShow = (event) => {
-      if (event.persisted) {
-        fetchProducts();
+    return () => { isMounted = false; };
+  }, []);
+
+  // --- THÊM MỚI: Lắng nghe sự kiện chuyển trang mô phỏng trong Canvas ---
+  useEffect(() => {
+    const handleMockNavigate = (e) => {
+      const newQuery = e.detail || '';
+      setSearchKeyword(newQuery);
+      if (newQuery.trim() !== '') {
+        const filtered = allProducts.filter(p => p.name.toLowerCase().includes(newQuery.toLowerCase()));
+        setDisplayedProducts(filtered);
+      } else {
+        setDisplayedProducts(allProducts);
       }
     };
 
-    window.addEventListener('pageshow', handlePageShow);
-    
-    return () => {
-        isMounted = false;
-        window.removeEventListener('pageshow', handlePageShow);
-    };
-  }, []);
+    window.addEventListener('mock-navigate', handleMockNavigate);
+    return () => window.removeEventListener('mock-navigate', handleMockNavigate);
+  }, [allProducts]);
 
   const handleAddQuantity = (product) => {
     setCart(prev => {
@@ -373,22 +418,12 @@ export default function App() {
     return item ? item.quantity : 0;
   };
 
-  const flashSaleProducts = products.filter(p => p.on_sale).slice(0, 5);
-  
-  // Logic lọc sản phẩm Sữa hoặc Snack
-  const meatProducts = products.filter(p => 
-    p.categories && p.categories.some(cat => 
-        cat.name.toLowerCase().includes('sữa') || 
-        cat.name.toLowerCase().includes('snack')
-    )
-  );
-  
   const cartTotalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="min-h-screen bg-[#f1f1f1] font-sans pb-10 relative">
-      {/* TRUYỀN ALL PRODUCTS VÀO HEADER ĐỂ LÀM SEARCH */}
-      <Header cartCount={cartTotalCount} allProducts={products} />
+      {/* Truyền allProducts vào Header để thanh Search vẫn hoạt động liên tục */}
+      <Header cartCount={cartTotalCount} allProducts={allProducts} />
       
       <MobileCategoryNav />
 
@@ -396,60 +431,37 @@ export default function App() {
         <DesktopSidebar />
 
         <main className="flex-1 min-w-0 space-y-6">
-          {/* Banner */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 bg-gradient-to-r from-green-500 to-green-400 rounded-xl p-6 h-48 sm:h-64 flex items-center justify-between text-white shadow-sm overflow-hidden relative">
-              <div className="z-10">
-                <h2 className="text-3xl sm:text-4xl font-bold mb-2">ĐẠI TIỆC RAU CỦ</h2>
-                <p className="text-lg mb-4 text-green-100">Ưu đãi đặc biệt tại Bách Hóa Lan Hảo</p>
-                <button className="bg-yellow-400 text-green-900 px-6 py-2 rounded-full font-bold hover:bg-yellow-300">Mua ngay</button>
-              </div>
-              <div className="absolute right-0 bottom-0 opacity-50"><span className="text-9xl">🥬</span></div>
-            </div>
-            <div className="hidden md:flex flex-col space-y-4">
-              <div className="bg-orange-400 rounded-xl p-4 flex-1 text-white shadow-sm flex items-center font-bold">Thịt heo VietGAP</div>
-              <div className="bg-blue-400 rounded-xl p-4 flex-1 text-white shadow-sm flex items-center font-bold">Hải sản tươi sống</div>
-            </div>
-          </div>
-
-          {/* Flash Sale Section */}
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-red-500">
-            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white italic tracking-wider">⚡ GIÁ SỐC HÔM NAY</h2>
-              <a href="#" className="text-white text-sm hover:underline">Xem tất cả <ChevronRight className="inline" size={16} /></a>
-            </div>
-            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {flashSaleProducts.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  quantity={getProductQuantity(product.id)}
-                  onAdd={handleAddQuantity}
-                  onRemove={handleRemoveQuantity}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Meat & Seafood Section */}
           <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-[#008b4b]">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800 uppercase flex items-center">
-                <span className="text-2xl mr-2">🥩</span> Sữa, Snack
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                Kết quả tìm kiếm cho: <span className="text-[#008b4b] ml-2">"{searchKeyword}"</span>
               </h2>
+              <span className="text-sm text-gray-500">{displayedProducts.length} sản phẩm</span>
             </div>
-            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {meatProducts.length > 0 ? meatProducts.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  quantity={getProductQuantity(product.id)}
-                  onAdd={handleAddQuantity}
-                  onRemove={handleRemoveQuantity}
-                />
-              )) : (
-                <div className="col-span-full py-10 text-center text-gray-400 italic">
-                  {loading ? 'Đang tải dữ liệu sản phẩm từ hệ thống...' : 'Không có sản phẩm nào thuộc danh mục này.'}
+            
+            <div className="p-4">
+              {loading ? (
+                <div className="py-10 text-center text-gray-400 italic">Đang tìm kiếm sản phẩm...</div>
+              ) : displayedProducts.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {displayedProducts.map(product => (
+                    <ProductCard 
+                      key={product.id} 
+                      product={product} 
+                      quantity={getProductQuantity(product.id)}
+                      onAdd={handleAddQuantity}
+                      onRemove={handleRemoveQuantity}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="py-16 flex flex-col items-center justify-center text-center">
+                  <SearchX size={64} className="text-gray-300 mb-4" />
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Không tìm thấy sản phẩm nào</h3>
+                  <p className="text-gray-500 text-sm">Vui lòng kiểm tra lại lỗi chính tả hoặc thử với từ khóa khác.</p>
+                  <Link href="/" className="mt-6 px-6 py-2 bg-[#008b4b] text-white font-bold rounded-full hover:bg-[#00703c] transition-colors">
+                    Quay lại trang chủ
+                  </Link>
                 </div>
               )}
             </div>
