@@ -7,7 +7,6 @@ import { Clock, ShieldCheck, Ticket, Phone, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
 
-
 // Component hiển thị thẻ sản phẩm (Tốt nhất bạn nên tách cái này ra file riêng src/components/ProductCard.js trong tương lai)
 const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
   const discountPercent = product.on_sale && product.regular_price > product.price

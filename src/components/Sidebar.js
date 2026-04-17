@@ -2,22 +2,18 @@
 
 import React, { useState } from 'react';
 import { Menu, ChevronRight, ChevronDown } from 'lucide-react';
-
-// ⚠️ KHI CHẠY TRÊN VS CODE: Hãy BỎ COMMENT dòng dưới đây và XÓA phần MOCK COMPONENT đi nhé!
+// IMPORT CHUẨN CỦA NEXT.JS
 import Link from 'next/link';
 
-
-// 1. DATA ĐỒNG BỘ 100% VỚI WORDPRESS "CATEGORIES IMAGE" MENU
 export const categoriesData = [
   { id: 1, name: 'Bánh kẹo các loại', icon: '🍬', slug: 'banh-keo-cac-loai' },
-  { id: 2, name: 'Bia, nước giải khát', icon: '🍺', slug: 'bia-nuoc-co-con' },
-  { id: 3, name: 'DẦU ĂN, NƯỚC CHẤM, GIA VỊ', icon: '🧂', slug: 'dau-an-gia-vi' },
+  { id: 2, name: 'Bia, nước giải khát', icon: '🍺', slug: 'bia-nuoc-giai-khat' },
+  { id: 3, name: 'DẦU ĂN, NƯỚC CHẤM, GIA VỊ', icon: '🧂', slug: 'dau-an-nuoc-cham-gia-vi' },
   { 
     id: 4, 
     name: 'MÌ, MIẾN, CHÁO, PHỞ', 
     icon: '🍜', 
     slug: 'mi-mien-chao-pho',
-    // Cấu trúc Sub-menu (Menu con) cho Custom Links
     subItems: [
       { id: 41, name: 'Asparagus', slug: 'asparagus' },
       { id: 42, name: 'Beetroot', slug: 'beetroot' },
@@ -29,7 +25,6 @@ export const categoriesData = [
   { id: 7, name: 'Frozen Foods', icon: '🧊', slug: 'frozen-foods' },
 ];
 
-// 2. Menu trượt ngang trên Điện thoại (Chỉ hiện các menu cha)
 export const MobileCategoryNav = () => (
   <nav className="bg-white shadow-sm border-b md:hidden">
     <div className="max-w-7xl mx-auto px-4 overflow-x-auto no-scrollbar">
@@ -40,6 +35,7 @@ export const MobileCategoryNav = () => (
         </li>
         {categoriesData.map(cat => (
           <li key={cat.id} className="text-sm font-medium text-gray-700 cursor-pointer hover:text-green-600 flex items-center whitespace-nowrap">
+            {/* DÙNG LINK CHUẨN ĐỂ KHÔNG BỊ NHÁY TRANG */}
             <Link href={`/search?categorySlug=${cat.slug}`} className="flex items-center">
               <span className="mr-1">{cat.icon}</span> {cat.name}
             </Link>
@@ -50,9 +46,7 @@ export const MobileCategoryNav = () => (
   </nav>
 );
 
-// 3. Cột Menu bên trái trên Máy tính (Hỗ trợ Dropdown)
 export const DesktopSidebar = () => {
-  // State quản lý việc đóng/mở menu con
   const [openDropdown, setOpenDropdown] = useState(null);
 
   const toggleMenu = (id) => {
@@ -69,10 +63,8 @@ export const DesktopSidebar = () => {
         <ul className="py-2">
           {categoriesData.map(cat => (
             <li key={cat.id} className="border-b border-gray-50 last:border-0 group">
-              {/* Kiểm tra xem danh mục này có subItems hay không */}
               {cat.subItems ? (
                 <div className="flex flex-col">
-                  {/* Nút cha để bấm xổ xuống */}
                   <div 
                     onClick={() => toggleMenu(cat.id)}
                     className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center transition-colors"
@@ -88,7 +80,6 @@ export const DesktopSidebar = () => {
                     )}
                   </div>
                   
-                  {/* Nội dung Menu con xổ xuống */}
                   <div className={`overflow-hidden transition-all duration-300 ${openDropdown === cat.id ? 'max-h-48' : 'max-h-0'}`}>
                     <ul className="bg-gray-50 py-1">
                       {cat.subItems.map(sub => (
@@ -102,7 +93,7 @@ export const DesktopSidebar = () => {
                   </div>
                 </div>
               ) : (
-                /* Nút bình thường không có menu con */
+                /* DÙNG LINK CHUẨN ĐỂ KHÔNG BỊ NHÁY TRANG */
                 <Link href={`/search?categorySlug=${cat.slug}`} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center transition-colors group">
                   <span className="mr-3 text-xl group-hover:scale-110 transition-transform">{cat.icon}</span>
                   <span className="text-sm font-medium text-gray-700 group-hover:text-[#008b4b]">{cat.name}</span>
