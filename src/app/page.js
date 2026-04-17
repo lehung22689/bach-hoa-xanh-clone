@@ -1,202 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Clock, ShieldCheck, Ticket, Phone, ChevronRight } from 'lucide-react';
+
+// ⚠️ KHI CHẠY TRÊN VS CODE CỦA BẠN: Hãy bỏ comment dòng dưới đây và XÓA phần MOCK COMPONENT đi nhé!
 import Link from 'next/link';
-import { Search, ShoppingCart, MapPin, Menu, ChevronRight, X } from 'lucide-react';
 
 
 
-// --- MOCK DATA: Danh mục hiển thị trên giao diện ---
-const mockCategories = [
-  { id: 1, name: 'Thịt, cá, hải sản', icon: '🥩' },
-  { id: 2, name: 'Rau, củ, trái cây', icon: '🥬' },
-  { id: 3, name: 'Sữa các loại', icon: '🥛' },
-  { id: 4, name: 'Bia, nước giải khát', icon: '🍺' },
-  { id: 5, name: 'Mì, miến, cháo, phở', icon: '🍜' },
-  { id: 6, name: 'Dầu ăn, gia vị', icon: '🧂' },
-  { id: 7, name: 'Gạo, bột, đồ khô', icon: '🍚' },
-  { id: 8, name: 'Kem, thực phẩm đông', icon: '🍦' },
-];
-
-// --- COMPONENTS ---
-
-// 1. Header Component (Đã nâng cấp chức năng tìm kiếm)
-const Header = ({ cartCount, allProducts }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const searchRef = useRef(null);
-
-  // Xử lý khi người dùng gõ từ khóa
-  useEffect(() => {
-    if (searchQuery.trim().length === 0) {
-      setSearchResults([]);
-      return;
-    }
-
-    // Lọc sản phẩm có tên chứa từ khóa (không phân biệt hoa thường)
-    const keyword = searchQuery.toLowerCase();
-    const results = allProducts.filter(product => 
-      product.name.toLowerCase().includes(keyword)
-    );
-    
-    // Chỉ lấy tối đa 5 kết quả đầu tiên để dropdown không bị quá dài
-    setSearchResults(results.slice(0, 5));
-  }, [searchQuery, allProducts]);
-
-  // Xử lý ẩn dropdown khi click ra ngoài ô tìm kiếm
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setIsSearchFocused(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <header className="bg-[#008b4b] text-white sticky top-0 z-50 shadow-md">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between py-3">
-          {/* Logo */}
-          <div className="flex items-center space-x-2 font-bold text-2xl tracking-tighter cursor-pointer">
-            <div className="bg-yellow-400 text-green-800 p-1 rounded-md">BÁCH HÓA</div>
-            <span>LAN HẢO</span>
-          </div>
-
-          {/* Location Selector */}
-          <div className="hidden md:flex items-center space-x-1 bg-[#00703c] px-3 py-2 rounded-lg cursor-pointer hover:bg-[#006030] text-sm">
-            <MapPin size={16} />
-            <span>Giao tới: <strong className="text-yellow-300">Dĩ An, Bình Dương</strong></span>
-          </div>
-
-          {/* KHU VỰC TÌM KIẾM (Search Bar) */}
-          <div className="flex-1 max-w-2xl mx-4 relative hidden sm:block" ref={searchRef}>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Tìm sản phẩm tại Bách Hóa Lan Hảo..."
-                className="w-full px-4 py-2.5 rounded-full text-black focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-              />
-              
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-10 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                >
-                  <X size={16} />
-                </button>
-              )}
-
-              <button className="absolute right-1 top-1 bg-gray-100 p-1.5 rounded-full text-gray-600 hover:bg-gray-200">
-                <Search size={20} />
-              </button>
-            </div>
-
-            {/* BẢNG KẾT QUẢ TÌM KIẾM (Dropdown) */}
-            {isSearchFocused && searchQuery.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
-                {searchResults.length > 0 ? (
-                  <ul className="py-2">
-                    {searchResults.map(product => (
-                      <li key={`search-${product.id}`} className="hover:bg-gray-50 border-b border-gray-100 last:border-0 transition-colors">
-                        <Link href="#" className="flex items-center p-3">
-                          <div className="w-12 h-12 flex-shrink-0 bg-white border rounded">
-                            <img 
-                              src={product.images[0]?.src || '/api/placeholder/48/48'} 
-                              alt={product.name}
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                          <div className="ml-3 flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 line-clamp-1 group-hover:text-[#008b4b]">
-                              {product.name}
-                            </p>
-                            <p className="text-red-600 font-bold text-sm mt-0.5">
-                              {product.price.toLocaleString('vi-VN')}₫
-                            </p>
-                          </div>
-                        </Link>
-                      </li>
-                    ))}
-                    <li className="p-2 text-center bg-gray-50 border-t">
-                      <button className="text-[#008b4b] text-sm font-bold hover:underline">
-                        Xem tất cả kết quả cho "{searchQuery}"
-                      </button>
-                    </li>
-                  </ul>
-                ) : (
-                  <div className="p-6 text-center text-gray-500 text-sm">
-                    Không tìm thấy sản phẩm nào khớp với <br/> <span className="font-bold text-gray-700">"{searchQuery}"</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Cart */}
-          <div className="flex items-center space-x-4">
-            <Link href="/cart" className="relative cursor-pointer bg-[#00703c] p-2.5 rounded-lg flex items-center space-x-2 hover:bg-[#006030]">
-              <ShoppingCart size={22} />
-              <span className="hidden sm:inline font-medium">Giỏ hàng</span>
-              {cartCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-yellow-400 text-red-600 font-bold rounded-full h-6 w-6 flex items-center justify-center text-xs border-2 border-[#008b4b]">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-};
-
-// 2. Navigation Categories (Mobile)
-const MobileCategoryNav = () => (
-  <nav className="bg-white shadow-sm border-b md:hidden">
-    <div className="max-w-7xl mx-auto px-4 overflow-x-auto no-scrollbar">
-      <ul className="flex items-center space-x-6 py-3 min-w-max">
-        <li className="flex items-center space-x-1 font-bold text-gray-800 cursor-pointer hover:text-green-600">
-          <Menu size={20} />
-          <span>DANH MỤC</span>
-        </li>
-        {mockCategories.map(cat => (
-          <li key={cat.id} className="text-sm font-medium text-gray-700 cursor-pointer hover:text-green-600 flex items-center whitespace-nowrap">
-            <span className="mr-1">{cat.icon}</span> {cat.name}
-          </li>
-        ))}
-      </ul>
-    </div>
-  </nav>
-);
-
-// 2.5 Desktop Sidebar
-const DesktopSidebar = () => (
-  <aside className="hidden md:block w-60 lg:w-64 flex-shrink-0 relative">
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden sticky top-[88px]">
-      <div className="bg-[#008b4b] text-white font-bold p-3 flex items-center space-x-2">
-        <Menu size={20} />
-        <span>DANH MỤC SẢN PHẨM</span>
-      </div>
-      <ul className="py-2">
-        {mockCategories.map(cat => (
-          <li key={cat.id} className="px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-center border-b border-gray-50 last:border-0 transition-colors group">
-            <span className="mr-3 text-xl group-hover:scale-110 transition-transform">{cat.icon}</span>
-            <span className="text-sm font-medium text-gray-700 group-hover:text-[#008b4b]">{cat.name}</span>
-            <ChevronRight size={16} className="ml-auto text-gray-400 opacity-0 group-hover:opacity-100 group-hover:text-[#008b4b] transition-opacity" />
-          </li>
-        ))}
-      </ul>
-    </div>
-  </aside>
-);
-
-// 3. Product Card Component
+// Component hiển thị thẻ sản phẩm (Tốt nhất bạn nên tách cái này ra file riêng src/components/ProductCard.js trong tương lai)
 const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
   const discountPercent = product.on_sale && product.regular_price > product.price
     ? Math.round(((product.regular_price - product.price) / product.regular_price) * 100) 
@@ -210,18 +22,21 @@ const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
         </div>
       )}
       
-      <div className="w-full aspect-square mb-3 relative overflow-hidden rounded-md bg-white border p-1">
+      <Link href={`/product?id=${product.id}`} className="block w-full aspect-square mb-3 relative overflow-hidden rounded-md bg-white border p-1">
         <img 
           src={product.images[0]?.src || '/api/placeholder/200/200'} 
           alt={product.name}
+          loading="lazy"
           className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
         />
-      </div>
+      </Link>
 
       <div className="flex flex-col flex-1">
-        <h3 className="text-sm text-gray-800 font-medium line-clamp-2 min-h-[40px] mb-2 hover:text-green-600 cursor-pointer">
-          {product.name}
-        </h3>
+        <Link href={`/product?id=${product.id}`}>
+          <h3 className="text-sm text-gray-800 font-medium line-clamp-2 min-h-[40px] mb-2 hover:text-green-600 cursor-pointer">
+            {product.name}
+          </h3>
+        </Link>
         
         <div className="mt-auto flex flex-col">
           <div className="mb-2">
@@ -265,13 +80,12 @@ const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
   );
 };
 
-// 4. Main App Component
-export default function App() {
+export default function HomePage() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- 1. Lấy giỏ hàng từ máy tính khách hàng khi vừa vào web ---
+  // Lấy giỏ hàng từ localStorage
   useEffect(() => {
     const savedCart = localStorage.getItem('lanHaoCart');
     if (savedCart) {
@@ -283,7 +97,7 @@ export default function App() {
     }
   }, []);
 
-  // --- 2. Lưu giỏ hàng vào máy tính mỗi khi biến 'cart' thay đổi ---
+  // Lưu giỏ hàng
   useEffect(() => {
     if (cart.length > 0) {
       localStorage.setItem('lanHaoCart', JSON.stringify(cart));
@@ -292,7 +106,7 @@ export default function App() {
     }
   }, [cart]);
 
-  // --- 3. Lấy sản phẩm từ WooCommerce ---
+  // Fetch sản phẩm mặc định cho trang chủ
   useEffect(() => {
     let isMounted = true; 
     
@@ -303,15 +117,14 @@ export default function App() {
         const consumerKey = 'ck_efbecb883c9732a5235e08233b5cf7944c46bc46';
         const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
 
-        const apiUrl = `${wpDomain}/wp-json/wc/v3/products?per_page=100&consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`;
+        // Lấy 100 sản phẩm mới nhất làm data cho trang chủ, lọc bớt các trường thừa
+        const apiUrl = `${wpDomain}/wp-json/wc/v3/products?per_page=100&_fields=id,name,price,regular_price,images,categories,on_sale&consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`;
         
         const response = await fetch(apiUrl);
         const data = await response.json();
         
         if (!Array.isArray(data)) {
-           console.error("❌ Lỗi từ WordPress (Có thể sai Key hoặc chặn truy cập):", data);
-           if (isMounted) setLoading(false);
-           return;
+           throw new Error("Không lấy được dữ liệu");
         }
         
         const formattedProducts = data.map(item => ({
@@ -329,25 +142,24 @@ export default function App() {
             setLoading(false);
         }
       } catch (error) {
-        console.error("❌ Lỗi mạng hoặc lỗi CORS:", error);
-        if (isMounted) setLoading(false);
+        console.log("Lỗi tải sản phẩm trang chủ:", error.message);
+        if (isMounted) {
+          // Fallback mock data
+          setProducts([
+            { id: 1, name: 'Sữa tươi tiệt trùng Vinamilk 100% không đường 1 lít', price: 35000, regular_price: 38000, images: [{src: '/api/placeholder/200/200'}], categories: [{name: 'Sữa'}], on_sale: true },
+            { id: 2, name: 'Thùng 48 hộp sữa tươi tiệt trùng có đường TH true MILK 180ml', price: 440000, regular_price: 440000, images: [{src: '/api/placeholder/200/200'}], categories: [{name: 'Sữa'}], on_sale: false },
+            { id: 3, name: 'Snack khoai tây vị tự nhiên Lay\'s gói 52g', price: 12000, regular_price: 13000, images: [{src: '/api/placeholder/200/200'}], categories: [{name: 'Snack'}], on_sale: true },
+            { id: 7, name: 'Bánh gạo nướng An vị Tảo Biển', price: 21000, regular_price: 25000, images: [{src: '/api/placeholder/200/200'}], categories: [{name: 'BÁNH KẸO CÁC LOẠI'}], on_sale: true },
+            { id: 8, name: 'Kẹo mút Chupa Chups hương trái cây', price: 35000, regular_price: 35000, images: [{src: '/api/placeholder/200/200'}], categories: [{name: 'BÁNH KẸO CÁC LOẠI'}], on_sale: false },
+          ]);
+          setLoading(false);
+        }
       }
     };
 
     fetchProducts();
     
-    const handlePageShow = (event) => {
-      if (event.persisted) {
-        fetchProducts();
-      }
-    };
-
-    window.addEventListener('pageshow', handlePageShow);
-    
-    return () => {
-        isMounted = false;
-        window.removeEventListener('pageshow', handlePageShow);
-    };
+    return () => { isMounted = false; };
   }, []);
 
   const handleAddQuantity = (product) => {
@@ -373,98 +185,163 @@ export default function App() {
     return item ? item.quantity : 0;
   };
 
+  // --- CÁC BỘ LỌC HIỂN THỊ SẢN PHẨM TRÊN TRANG CHỦ ---
   const flashSaleProducts = products.filter(p => p.on_sale).slice(0, 5);
   
-  // Logic lọc sản phẩm Sữa hoặc Snack
-  const meatProducts = products.filter(p => 
+  const candyProducts = products.filter(p => 
+    p.categories && p.categories.some(cat => 
+        cat.name.toUpperCase() === 'BÁNH KẸO CÁC LOẠI' ||
+        cat.name.toLowerCase().includes('bánh kẹo') ||
+        cat.name.toLowerCase().includes('bánh') ||
+        cat.name.toLowerCase().includes('kẹo')
+    )
+  ).slice(0, 10);
+
+  const dairySnackProducts = products.filter(p => 
     p.categories && p.categories.some(cat => 
         cat.name.toLowerCase().includes('sữa') || 
         cat.name.toLowerCase().includes('snack')
     )
-  );
-  
-  const cartTotalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  ).slice(0, 10);
 
   return (
-    <div className="min-h-screen bg-[#f1f1f1] font-sans pb-10 relative">
-      {/* TRUYỀN ALL PRODUCTS VÀO HEADER ĐỂ LÀM SEARCH */}
-      <Header cartCount={cartTotalCount} allProducts={products} />
-      
-      <MobileCategoryNav />
-
-      <div className="max-w-7xl mx-auto px-4 mt-4 flex gap-4 lg:gap-6">
-        <DesktopSidebar />
-
-        <main className="flex-1 min-w-0 space-y-6">
-          {/* Banner */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 bg-gradient-to-r from-green-500 to-green-400 rounded-xl p-6 h-48 sm:h-64 flex items-center justify-between text-white shadow-sm overflow-hidden relative">
-              <div className="z-10">
-                <h2 className="text-3xl sm:text-4xl font-bold mb-2">ĐẠI TIỆC RAU CỦ</h2>
-                <p className="text-lg mb-4 text-green-100">Ưu đãi đặc biệt tại Bách Hóa Lan Hảo</p>
-                <button className="bg-yellow-400 text-green-900 px-6 py-2 rounded-full font-bold hover:bg-yellow-300">Mua ngay</button>
-              </div>
-              <div className="absolute right-0 bottom-0 opacity-50"><span className="text-9xl">🥬</span></div>
-            </div>
-            <div className="hidden md:flex flex-col space-y-4">
-              <div className="bg-orange-400 rounded-xl p-4 flex-1 text-white shadow-sm flex items-center font-bold">Thịt heo VietGAP</div>
-              <div className="bg-blue-400 rounded-xl p-4 flex-1 text-white shadow-sm flex items-center font-bold">Hải sản tươi sống</div>
+    <>
+      {/* Banner Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 bg-gradient-to-r from-green-500 to-green-400 rounded-xl p-6 h-48 sm:h-64 flex items-center justify-between text-white shadow-sm overflow-hidden relative">
+          <div className="z-10">
+            <h2 className="text-3xl sm:text-4xl font-bold mb-2">ĐẠI TIỆC RAU CỦ</h2>
+            <p className="text-lg mb-4 text-green-100">Giảm giá lên đến 50% mỗi ngày</p>
+            <button className="bg-yellow-400 text-green-900 px-6 py-2 rounded-full font-bold hover:bg-yellow-300">
+              Mua ngay
+            </button>
+          </div>
+          <div className="absolute right-0 bottom-0 opacity-50 md:opacity-100">
+              <span className="text-9xl">🥬</span>
+          </div>
+        </div>
+        <div className="hidden md:flex flex-col space-y-4">
+          <div className="bg-gradient-to-r from-orange-400 to-red-400 rounded-xl p-4 flex-1 text-white shadow-sm flex items-center">
+            <div>
+              <h3 className="font-bold text-lg">Thịt heo VietGAP</h3>
+              <p className="text-sm opacity-90">Tươi ngon mỗi ngày</p>
             </div>
           </div>
-
-          {/* Flash Sale Section */}
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-red-500">
-            <div className="bg-gradient-to-r from-red-600 to-orange-500 p-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white italic tracking-wider">⚡ GIÁ SỐC HÔM NAY</h2>
-              <a href="#" className="text-white text-sm hover:underline">Xem tất cả <ChevronRight className="inline" size={16} /></a>
-            </div>
-            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {flashSaleProducts.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  quantity={getProductQuantity(product.id)}
-                  onAdd={handleAddQuantity}
-                  onRemove={handleRemoveQuantity}
-                />
-              ))}
+          <div className="bg-gradient-to-r from-blue-400 to-cyan-400 rounded-xl p-4 flex-1 text-white shadow-sm flex items-center">
+            <div>
+              <h3 className="font-bold text-lg">Hải sản nhập khẩu</h3>
+              <p className="text-sm opacity-90">Miễn phí giao hàng</p>
             </div>
           </div>
-
-          {/* Meat & Seafood Section */}
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-[#008b4b]">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800 uppercase flex items-center">
-                <span className="text-2xl mr-2">🥩</span> Sữa, Snack
-              </h2>
-            </div>
-            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {meatProducts.length > 0 ? meatProducts.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  quantity={getProductQuantity(product.id)}
-                  onAdd={handleAddQuantity}
-                  onRemove={handleRemoveQuantity}
-                />
-              )) : (
-                <div className="col-span-full py-10 text-center text-gray-400 italic">
-                  {loading ? 'Đang tải dữ liệu sản phẩm từ hệ thống...' : 'Không có sản phẩm nào thuộc danh mục này.'}
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
+        </div>
       </div>
 
-      <footer className="max-w-7xl mx-auto px-4 mt-10">
-        <div className="bg-white rounded-xl p-8 shadow-sm text-center">
-          <div className="bg-yellow-400 text-green-800 p-2 rounded-md inline-block font-bold text-xl mb-4">
-            BÁCH HÓA <span className="text-white">LAN HẢO</span>
-          </div>
-          <p className="text-sm text-gray-600">© 2026. Quản lý bởi Hảo. Hệ thống thực phẩm sạch tại Dĩ An.</p>
+      {/* Cấu trúc các tiện ích */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow-sm">
+        <div className="flex items-center space-x-3">
+            <div className="bg-green-100 p-2 rounded-full text-green-600"><Clock size={24} /></div>
+            <div><p className="font-bold text-sm">Giao hàng đúng giờ</p><p className="text-xs text-gray-500">Miễn phí đơn từ 300k</p></div>
         </div>
-      </footer>
-    </div>
+        <div className="flex items-center space-x-3">
+            <div className="bg-green-100 p-2 rounded-full text-green-600"><ShieldCheck size={24} /></div>
+            <div><p className="font-bold text-sm">100% Tươi ngon</p><p className="text-xs text-gray-500">Hoàn tiền nếu không tươi</p></div>
+        </div>
+        <div className="flex items-center space-x-3">
+            <div className="bg-green-100 p-2 rounded-full text-green-600"><Ticket size={24} /></div>
+            <div><p className="font-bold text-sm">Khuyến mãi mỗi ngày</p><p className="text-xs text-gray-500">Deal sốc giảm đến 50%</p></div>
+        </div>
+        <div className="flex items-center space-x-3">
+            <div className="bg-green-100 p-2 rounded-full text-green-600"><Phone size={24} /></div>
+            <div><p className="font-bold text-sm">Hỗ trợ 24/7</p><p className="text-xs text-gray-500">Hotline: 1900 xxxx</p></div>
+        </div>
+      </div>
+
+      {/* Flash Sale Section */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-red-500 flex flex-col">
+        <div className="bg-gradient-to-r from-red-600 to-orange-500 p-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white italic tracking-wider">⚡ GIÁ SỐC HÔM NAY</h2>
+        </div>
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {flashSaleProducts.map(product => (
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              quantity={getProductQuantity(product.id)}
+              onAdd={handleAddQuantity}
+              onRemove={handleRemoveQuantity}
+            />
+          ))}
+        </div>
+        {flashSaleProducts.length > 0 && (
+          <div className="border-t border-gray-100 bg-white hover:bg-gray-50 transition-colors">
+            <Link href="/search?on_sale=true" className="py-3.5 w-full flex items-center justify-center text-red-500 text-sm font-bold">
+              Xem tất cả sản phẩm khuyến mãi <ChevronRight size={18} className="ml-1" />
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Category Block: BÁNH KẸO CÁC LOẠI */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-orange-400 flex flex-col">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800 uppercase flex items-center">
+            <span className="text-2xl mr-2">🍬</span> Bánh kẹo các loại
+          </h2>
+        </div>
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {candyProducts.length > 0 ? candyProducts.map(product => (
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              quantity={getProductQuantity(product.id)}
+              onAdd={handleAddQuantity}
+              onRemove={handleRemoveQuantity}
+            />
+          )) : (
+            <div className="col-span-full py-10 text-center text-gray-400 italic">
+              {loading ? 'Đang tải dữ liệu sản phẩm từ hệ thống...' : 'Chưa có sản phẩm nào thuộc danh mục này.'}
+            </div>
+          )}
+        </div>
+        {candyProducts.length > 0 && (
+          <div className="border-t border-gray-100 bg-white hover:bg-gray-50 transition-colors">
+            <Link href="/search?categorySlug=banh-keo-cac-loai" className="py-3.5 w-full flex items-center justify-center text-orange-500 text-sm font-bold">
+              Xem tất cả Bánh kẹo các loại <ChevronRight size={18} className="ml-1" />
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Category Block: Sữa, Snack */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-[#008b4b] flex flex-col">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800 uppercase flex items-center">
+            <span className="text-2xl mr-2">🥛</span> Sữa, Snack
+          </h2>
+        </div>
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {dairySnackProducts.length > 0 ? dairySnackProducts.map(product => (
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              quantity={getProductQuantity(product.id)}
+              onAdd={handleAddQuantity}
+              onRemove={handleRemoveQuantity}
+            />
+          )) : (
+            <div className="col-span-full py-10 text-center text-gray-400 italic">
+              {loading ? 'Đang tải dữ liệu sản phẩm từ hệ thống...' : 'Không có sản phẩm nào thuộc danh mục này.'}
+            </div>
+          )}
+        </div>
+        {dairySnackProducts.length > 0 && (
+          <div className="border-t border-gray-100 bg-white hover:bg-gray-50 transition-colors">
+            <Link href="/search?categorySlug=sua" className="py-3.5 w-full flex items-center justify-center text-[#008b4b] text-sm font-bold">
+              Xem tất cả Sữa, Snack <ChevronRight size={18} className="ml-1" />
+            </Link>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

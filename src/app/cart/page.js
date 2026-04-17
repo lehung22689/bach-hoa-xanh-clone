@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   ChevronLeft, ChevronRight, Store, ShoppingCart, 
   X, Trash2, Check, Landmark, Wallet, CheckCircle2, 
-  Download, Home, HelpCircle 
+  Download, Home, HelpCircle, Loader2 
 } from 'lucide-react';
 
 export default function CartPage() {
@@ -26,6 +26,7 @@ export default function CartPage() {
   const [orderStep, setOrderStep] = useState('cart'); // 'cart' | 'success'
   const [orderData, setOrderData] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('pending'); // 'pending' | 'success'
+  const [isSubmitting, setIsSubmitting] = useState(false); // Trạng thái đang đẩy đơn lên máy chủ
 
   // 1. Lấy dữ liệu khi vào trang
   useEffect(() => {
@@ -118,28 +119,100 @@ export default function CartPage() {
 
   const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  // --- HÀM XỬ LÝ ĐẶT HÀNG ---
-  const handleCheckout = () => {
-    const newOrder = {
-      id: 'DH' + Math.floor(Math.random() * 100000),
-      items: cartItems,
-      total: totalAmount,
-      paymentMethod: paymentMethod,
-      deliveryMethod: deliveryMethod,
-      date: new Date().toLocaleDateString('vi-VN')
-    };
+  // --- HÀM XỬ LÝ ĐẶT HÀNG (ĐÃ CẬP NHẬT ĐẨY API THẬT) ---
+  const handleCheckout = async () => {
+    if (cartItems.length === 0) return;
+    setIsSubmitting(true);
+    
+    try {
+      const wpDomain = 'https://bachhoalanhao.com';
+      const consumerKey = 'ck_efbecb883c9732a5235e08233b5cf7944c46bc46';
+      const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
 
-    // Lưu thông tin đơn hàng
-    setOrderData(newOrder);
-    sessionStorage.setItem('lanHaoLatestOrder', JSON.stringify(newOrder));
-    
-    // Xóa giỏ hàng
-    setCartItems([]);
-    localStorage.removeItem('lanHaoCart');
-    
-    // Chuyển sang màn hình thành công
-    setOrderStep('success');
-    setPaymentStatus('pending'); // Reset trạng thái thanh toán
+      // 1. Chuẩn bị danh sách sản phẩm theo định dạng của WooCommerce
+      const lineItems = cartItems.map(item => ({
+        product_id: item.id,
+        quantity: item.quantity
+      }));
+
+      // 2. Map phương thức thanh toán sang định dạng của Woo
+      let wooPaymentMethod = 'cod';
+      let wooPaymentTitle = 'Tiền mặt khi nhận hàng';
+      if (paymentMethod === 'transfer') {
+        wooPaymentMethod = 'bacs'; // Mã chuẩn của Chuyển khoản ngân hàng trong Woo
+        wooPaymentTitle = 'Chuyển khoản ngân hàng';
+      } else if (paymentMethod === 'momo') {
+        wooPaymentMethod = 'momo';
+        wooPaymentTitle = 'MoMo';
+      }
+
+      // 3. Payload chuẩn bị gửi lên
+      // Thông tin khách hàng ở đây đang được giả lập, thực tế sẽ lấy từ Form nhập liệu của khách
+      const orderPayload = {
+        payment_method: wooPaymentMethod,
+        payment_method_title: wooPaymentTitle,
+        set_paid: false,
+        billing: {
+          first_name: "Anh Hảo",
+          address_1: "13/2 QL1K, Kp Tân Hòa, Phường Đông Hòa",
+          city: "Dĩ An",
+          state: "Bình Dương",
+          country: "VN",
+          phone: "0937298982"
+        },
+        shipping: {
+          first_name: "Anh Hảo",
+          address_1: "13/2 QL1K, Kp Tân Hòa, Phường Đông Hòa",
+          city: "Dĩ An",
+          state: "Bình Dương",
+          country: "VN"
+        },
+        line_items: lineItems
+      };
+
+      // 4. Gọi API POST để tạo đơn hàng
+      const response = await fetch(`${wpDomain}/wp-json/wc/v3/orders?consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(orderPayload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Lỗi khi tạo đơn hàng trên máy chủ');
+      }
+
+      const wooOrder = await response.json();
+
+      // 5. Lưu thông tin đơn hàng vừa tạo thành công
+      const newOrder = {
+        id: wooOrder.id, // ID thật dạng số (VD: 6892) dùng để Polling API
+        displayId: 'DH' + wooOrder.id, // ID hiển thị và tạo mã QR (VD: DH6892) để SePay dễ nhận diện
+        items: cartItems,
+        total: totalAmount,
+        paymentMethod: paymentMethod,
+        deliveryMethod: deliveryMethod,
+        date: new Date().toLocaleDateString('vi-VN')
+      };
+
+      setOrderData(newOrder);
+      sessionStorage.setItem('lanHaoLatestOrder', JSON.stringify(newOrder));
+      
+      // Xóa giỏ hàng
+      setCartItems([]);
+      localStorage.removeItem('lanHaoCart');
+      
+      // Chuyển sang màn hình thành công
+      setOrderStep('success');
+      setPaymentStatus('pending'); // Reset trạng thái thanh toán
+
+    } catch (error) {
+      console.error("Lỗi đặt hàng:", error);
+      alert("Đã xảy ra lỗi khi tạo đơn hàng. Vui lòng thử lại!");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const PAYMENT_OPTIONS = [
@@ -170,19 +243,22 @@ export default function CartPage() {
       // Hàm kiểm tra trạng thái thanh toán từ Backend WordPress
       const checkPaymentStatus = async () => {
         try {
-          // --- CODE GỌI API THỰC TẾ (Hiện đang comment để tránh lỗi) ---
-          // const wpDomain = 'https://bachhoalanhao.com';
-          // const response = await fetch(`${wpDomain}/wp-json/wc/v3/orders/${orderData.id}?consumer_key=...&consumer_secret=...`);
-          // const orderInfo = await response.json();
-          //
-          // Nếu trạng thái đơn hàng trên WooCommerce đã chuyển sang 'processing' (Đã thanh toán)
-          // if (orderInfo.status === 'processing' || orderInfo.status === 'completed') {
-          //   setPaymentStatus('success');
-          //   clearInterval(pollingInterval); // Ngừng kiểm tra khi đã thành công
-          // }
-
-          console.log(`[API Polling] Đang kiểm tra thanh toán cho đơn ${orderData.id}...`);
+          const wpDomain = 'https://bachhoalanhao.com';
+          const consumerKey = 'ck_efbecb883c9732a5235e08233b5cf7944c46bc46';
+          const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
           
+          const response = await fetch(`${wpDomain}/wp-json/wc/v3/orders/${orderData.id}?consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`);
+          
+          if (response.ok) {
+            const orderInfo = await response.json();
+            // Khi SePay nhận tiền, nó sẽ báo Webhook sang Woo và đổi trạng thái thành 'processing' hoặc 'completed'
+            if (orderInfo.status === 'processing' || orderInfo.status === 'completed') {
+              setPaymentStatus('success');
+              clearInterval(pollingInterval); // Ngừng kiểm tra khi đã thành công
+            }
+          } else {
+            console.log(`[API Polling] Đang chờ thanh toán cho đơn hàng ${orderData.displayId}...`);
+          }
         } catch (error) {
           console.error("Lỗi khi kiểm tra thanh toán:", error);
         }
@@ -190,13 +266,6 @@ export default function CartPage() {
 
       // Thiết lập gọi API kiểm tra mỗi 3 giây (3000ms)
       pollingInterval = setInterval(checkPaymentStatus, 3000);
-
-      // Tạm thời mình vẫn để một hàm giả lập tự động chuyển thành công sau 15 giây
-      // để bạn có thể xem UI hoạt động trên giao diện này. Khi ráp API thật, bạn xóa khối setTimeout này đi.
-      setTimeout(() => {
-        setPaymentStatus('success');
-        clearInterval(pollingInterval);
-      }, 15000);
     }
 
     // Dọn dẹp interval khi component bị hủy hoặc paymentStatus thay đổi
@@ -210,9 +279,8 @@ export default function CartPage() {
   // GIAO DIỆN 1: MÀN HÌNH ĐẶT HÀNG THÀNH CÔNG
   // ==========================================
   if (orderStep === 'success' && orderData) {
-    // Tạo mã QR ngân hàng động (Chuẩn VietQR)
-    // Cấu trúc nội dung: Thanh toan don hang {Mã đơn hàng}
-    const qrUrl = `https://img.vietqr.io/image/vietinbank-13571122-compact2.png?amount=${orderData.total}&addInfo=SEVQR Thanh toan ${orderData.id}&accountName=BACH HOA LAN HAO`;
+    // Sửa lại thành VietinBank, đúng số tài khoản và bắt buộc thêm chữ SEVQR vào addInfo
+    const qrUrl = `https://img.vietqr.io/image/vietinbank-13571122-compact2.png?amount=${orderData.total}&addInfo=SEVQR%20${orderData.displayId}&accountName=BACH%20HOA%20LAN%20HAO`;
 
     return (
       <div className="min-h-screen bg-[#f1f1f1] font-sans pb-28 relative flex flex-col items-center">
@@ -232,7 +300,7 @@ export default function CartPage() {
           <div className="bg-white rounded-xl shadow-sm border p-4 space-y-3">
             <div className="flex justify-between items-center border-b pb-3">
               <span className="text-gray-600">Mã đơn hàng:</span>
-              <span className="font-bold text-gray-800">{orderData.id}</span>
+              <span className="font-bold text-gray-800">{orderData.displayId}</span>
             </div>
             <div className="flex justify-between items-center border-b pb-3">
               <span className="text-gray-600">Tổng đơn hàng:</span>
@@ -289,17 +357,13 @@ export default function CartPage() {
                     <button className="flex items-center text-blue-500 text-sm font-medium hover:underline mb-6">
                       Tải <Download size={14} className="mx-1" /> và quét mã QR <HelpCircle size={14} className="ml-1 text-gray-400" />
                     </button>
-
-                    {/* Nút giả lập thanh toán (Dành cho việc test nhanh) */}
-                    <button 
-                      onClick={() => setPaymentStatus('success')}
-                      className="text-xs bg-gray-100 text-gray-500 px-4 py-2 rounded-full hover:bg-gray-200 transition-colors"
-                    >
-                      (Nút Test) Mô phỏng Khách đã chuyển khoản
-                    </button>
                     
-                    <p className="text-xs text-gray-400 mt-4 text-center">
-                      Hệ thống đang tự động kiểm tra giao dịch...
+                    <p className="text-xs text-gray-500 mt-4 text-center flex items-center justify-center">
+                      <span className="relative flex h-3 w-3 mr-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-[#008b4b]"></span>
+                      </span>
+                      Hệ thống đang chờ bạn thanh toán...
                     </p>
                   </>
                 )}
@@ -541,9 +605,16 @@ export default function CartPage() {
             </div>
             <button 
               onClick={handleCheckout}
-              className="w-full sm:w-auto flex-1 bg-yellow-400 text-green-900 font-bold text-lg py-3.5 rounded-xl hover:bg-yellow-300 transition-colors shadow-sm"
+              disabled={isSubmitting}
+              className={`w-full sm:w-auto flex-1 font-bold text-lg py-3.5 rounded-xl transition-colors shadow-sm flex items-center justify-center ${
+                isSubmitting ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-yellow-400 text-green-900 hover:bg-yellow-300'
+              }`}
             >
-              ĐẶT HÀNG
+              {isSubmitting ? (
+                <><Loader2 size={20} className="animate-spin mr-2" /> ĐANG XỬ LÝ...</>
+              ) : (
+                'ĐẶT HÀNG'
+              )}
             </button>
           </div>
         </div>
