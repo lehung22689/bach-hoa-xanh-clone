@@ -8,16 +8,15 @@ import {
   Navigation, ChevronDown, Check, Map as MapIcon
 } from 'lucide-react';
 
-// ⚠️ KHI CHẠY TRÊN VS CODE: Hãy BỎ COMMENT các dòng import dưới đây và XÓA phần MOCK COMPONENT đi nhé!
+// ⚠️ KHI CHẠY TRÊN VS CODE: Hãy BỎ COMMENT các dòng dưới đây và XÓA phần MOCK COMPONENT đi nhé!
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
-import { getAuth, signInWithPhoneNumber, signOut } from "firebase/auth";
+import { getAuth, signInWithPhoneNumber, signOut, RecaptchaVerifier } from "firebase/auth";
 import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
 
 
-// ID dự án Firebase của bạn
 const APP_ID = "bach-hoa-lan-hao-v1";
 
 export default function Header() {
@@ -34,23 +33,29 @@ export default function Header() {
   const router = useRouter();
 
   // --- STATE QUẢN LÝ FLOW ĐỊA CHỈ ---
-  const [addressStep, setAddressStep] = useState('list'); // 'list' | 'province' | 'ward' | 'form' | 'map'
+  const [addressStep, setAddressStep] = useState('list');
   const [editingId, setEditingId] = useState(null); 
-  const [isMapLocked, setIsMapLocked] = useState(true); // Khóa bản đồ mặc định
-  const [newAddrData, setNewAddrData] = useState({
-    province: '',
-    ward: '',
-    detail: '',
-    name: '',
-    phone: ''
-  });
+  const [isMapLocked, setIsMapLocked] = useState(true); 
+  const [newAddrData, setNewAddrData] = useState({ province: '', ward: '', detail: '', name: '', phone: '' });
   const [searchKey, setSearchKey] = useState('');
   const [tempAddrId, setTempAddrId] = useState(selectedAddressId);
+
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(showLoginModal);
+
+  useEffect(() => {
+      setIsLoginModalOpen(showLoginModal);
+  }, [showLoginModal]);
 
   const displayName = profile?.displayName || profile?.fullName || user?.phoneNumber || "Đăng nhập";
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  // --- THÊM STATE QUẢN LÝ OTP AUTH ---
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [loginStep, setLoginStep] = useState('phone'); // 'phone' | 'otp'
+  const [otpCode, setOtpCode] = useState('');
+  const [confirmationResult, setConfirmationResult] = useState(null);
+  const [isProcessingAuth, setIsProcessingAuth] = useState(false);
+
   const auth = typeof getAuth === 'function' ? getAuth() : {};
 
   const mockProvinces = ["Thành phố Hồ Chí Minh", "Bình Dương", "Thành phố Cần Thơ", "Thành phố Đà Nẵng", "Thành phố Hải Phòng", "Thành phố Huế", "Tỉnh An Giang", "Tỉnh Bắc Ninh"];
@@ -88,10 +93,90 @@ export default function Header() {
     try { await signOut(auth); } catch (e) { console.error("Lỗi đăng xuất:", e); } 
   };
 
+  // Reset form khi đóng
   const handleCloseModal = () => { 
     setShowLoginModal(false); 
+    setIsLoginModalOpen(false); 
     setPhoneNumber(''); 
+    setOtpCode('');
+    setLoginStep('phone');
+    setConfirmationResult(null);
   };
+
+  // --- SỬA LỖI: LOGIC CHẠY FIREBASE THỰC TẾ ---
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier && typeof RecaptchaVerifier === 'function') {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: (response) => {
+          console.log("reCAPTCHA đã giải quyết");
+        },
+        'expired-callback': () => {
+           console.log("reCAPTCHA hết hạn");
+        }
+      });
+    }
+  };
+
+  const handleLoginSubmit = async () => {
+      if (!phoneNumber || phoneNumber.length < 9) {
+          alert("Vui lòng nhập số điện thoại hợp lệ.");
+          return;
+      }
+      
+      setIsProcessingAuth(true);
+      try {
+        setupRecaptcha();
+        const appVerifier = window.recaptchaVerifier;
+        // Chuyển 0357... thành +84357... theo chuẩn Firebase
+        const formattedPhone = phoneNumber.startsWith('0') ? '+84' + phoneNumber.slice(1) : phoneNumber;
+        
+        // Gửi SMS OTP
+        if (typeof signInWithPhoneNumber === 'function') {
+          const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+          setConfirmationResult(confirmation);
+          setLoginStep('otp'); // Chuyển sang form nhập OTP
+        }
+      } catch (error) {
+        console.error("Lỗi gửi SMS:", error);
+        alert("Có lỗi xảy ra khi gửi SMS: " + error.message);
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = null;
+        }
+      } finally {
+        setIsProcessingAuth(false);
+      }
+  };
+
+  const handleVerifyOtp = async () => {
+      if (!otpCode || otpCode.length < 6) {
+          alert("Vui lòng nhập đủ 6 số OTP.");
+          return;
+      }
+      setIsProcessingAuth(true);
+      try {
+          if (confirmationResult) {
+              await confirmationResult.confirm(otpCode);
+              // Xác thực thành công -> Hàm onAuthStateChanged ở Context sẽ tự lo việc cập nhật UI
+              handleCloseModal();
+          }
+      } catch (error) {
+          console.error("Lỗi xác thực OTP:", error);
+          alert("Mã OTP không đúng hoặc đã hết hạn.");
+      } finally {
+          setIsProcessingAuth(false);
+      }
+  };
+
+  const handlePhoneKeyDown = (e) => {
+      if (e.key === 'Enter') handleLoginSubmit();
+  };
+
+  const handleOtpKeyDown = (e) => {
+      if (e.key === 'Enter') handleVerifyOtp();
+  };
+
 
   const openAddressPopup = () => {
     setTempAddrId(selectedAddressId);
@@ -101,11 +186,7 @@ export default function Header() {
 
   const startAddAddress = () => {
     setEditingId(null); 
-    setNewAddrData({
-      province: '', ward: '', detail: '', 
-      name: profile?.fullName || '', 
-      phone: user?.phoneNumber?.replace('+84', '0') || ''
-    });
+    setNewAddrData({ province: '', ward: '', detail: '', name: profile?.fullName || '', phone: user?.phoneNumber?.replace('+84', '0') || '' });
     setAddressStep('province');
   };
 
@@ -115,35 +196,17 @@ export default function Header() {
     const ward = parts.length >= 2 ? parts[parts.length - 2] : '';
     const detail = parts.slice(0, Math.max(1, parts.length - 2)).join(', ');
 
-    setNewAddrData({
-      province,
-      ward,
-      detail,
-      name: addr.name,
-      phone: addr.phone
-    });
+    setNewAddrData({ province, ward, detail, name: addr.name, phone: addr.phone });
     setEditingId(addr.id);
     setAddressStep('form'); 
   };
 
-  const selectProvince = (prov) => {
-    setNewAddrData(prev => ({ ...prev, province: prov }));
-    setAddressStep('ward');
-    setSearchKey('');
-  };
-
-  const selectWard = (ward) => {
-    setNewAddrData(prev => ({ ...prev, ward: ward }));
-    setAddressStep('form');
-    setSearchKey('');
-  };
+  const selectProvince = (prov) => { setNewAddrData(prev => ({ ...prev, province: prov })); setAddressStep('ward'); setSearchKey(''); };
+  const selectWard = (ward) => { setNewAddrData(prev => ({ ...prev, ward: ward })); setAddressStep('form'); setSearchKey(''); };
 
   const goToMapConfirm = () => {
-    if (!newAddrData.detail || !newAddrData.name || !newAddrData.phone) {
-      alert("Vui lòng nhập đầy đủ thông tin");
-      return;
-    }
-    setIsMapLocked(true); // Khóa bản đồ khi mới vào
+    if (!newAddrData.detail || !newAddrData.name || !newAddrData.phone) { alert("Vui lòng nhập đầy đủ thông tin"); return; }
+    setIsMapLocked(true); 
     setAddressStep('map');
   };
 
@@ -157,18 +220,7 @@ export default function Header() {
         ? doc(db, 'artifacts', APP_ID, 'users', user.uid, 'addresses', editingId)
         : collection(db, 'artifacts', APP_ID, 'users', user.uid, 'addresses');
 
-      const data = {
-        name: newAddrData.name,
-        phone: newAddrData.phone,
-        address: fullAddress,
-        // Lưu trữ tọa độ (Mô phỏng: Trong thực tế bạn cần dùng thư viện Map thực thụ để lấy lat/lng thực)
-        coords: {
-            lat: 10.8491, // Ví dụ tọa độ Dĩ An
-            lng: 106.7725,
-            isManuallyAdjusted: !isMapLocked // Đánh dấu nếu khách đã tự tay sửa vị trí trên map
-        },
-        updatedAt: new Date().toISOString()
-      };
+      const data = { name: newAddrData.name, phone: newAddrData.phone, address: fullAddress, coords: { lat: 10.8491, lng: 106.7725, isManuallyAdjusted: !isMapLocked }, updatedAt: new Date().toISOString() };
 
       if (editingId) {
         if (typeof updateDoc === 'function') await updateDoc(addrRef, data);
@@ -179,7 +231,6 @@ export default function Header() {
       setAddressStep('list');
       setEditingId(null);
     } catch (e) {
-      console.error(e);
       alert("Lỗi khi lưu địa chỉ. Vui lòng thử lại.");
     } finally {
       setIsSearching(false);
@@ -189,12 +240,9 @@ export default function Header() {
   const handleDelete = async (id) => {
     if (!confirm("Xóa địa chỉ này?")) return;
     const db = typeof getFirestore === 'function' ? getFirestore() : {};
-    try {
-      if (typeof deleteDoc === 'function') await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'addresses', id));
-    } catch (e) { console.error(e); }
+    try { if (typeof deleteDoc === 'function') await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'addresses', id)); } catch (e) { console.error(e); }
   };
 
-  // --- RENDER MODAL CONTENT DỰA TRÊN STEP ---
   const renderAddressContent = () => {
     switch(addressStep) {
       case 'list':
@@ -303,12 +351,8 @@ export default function Header() {
               <button onClick={() => setShowAddressModal(false)} className="text-gray-400 bg-gray-100 rounded-full p-1"><X size={20} /></button>
             </div>
             <div className="flex-1 flex flex-col overflow-hidden relative">
-               
-               {/* 🗺️ HIỂN THỊ BẢN ĐỒ VÀ LỚP PHỦ KHÓA DI CHUYỂN */}
                <div className="flex-1 relative min-h-[380px] bg-gray-100">
                   <iframe width="100%" height="100%" frameBorder="0" scrolling="no" src={mapUrl} className="absolute inset-0" title="Google Map" />
-                  
-                  {/* Lớp phủ chặn tương tác khi đang bị khóa (isMapLocked === true) */}
                   {isMapLocked && (
                     <div className="absolute inset-0 z-20 cursor-not-allowed bg-black/5 flex items-start justify-center pt-4">
                         <span className="bg-white/90 px-3 py-1.5 rounded-full text-[12px] font-bold text-gray-600 shadow-sm flex items-center border border-gray-100">
@@ -316,13 +360,10 @@ export default function Header() {
                         </span>
                     </div>
                   )}
-
-                  {/* Pin định vị luôn ở giữa màn hình */}
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full pointer-events-none mb-4 z-30">
                     <MapPin size={44} className="text-red-500 fill-red-500 drop-shadow-2xl" />
                   </div>
                </div>
-
                <div className="p-5 bg-white shadow-2xl z-10 text-gray-800">
                   <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-5">
                     <div className="flex items-center text-[#008b4b] mb-1 font-bold text-[13px] uppercase tracking-wider">
@@ -330,16 +371,10 @@ export default function Header() {
                     </div>
                     <p className="text-[15px] leading-relaxed font-bold">{fullAddressString}</p>
                   </div>
-                  
                   <div className="flex gap-3">
-                    {/* Nút Sửa vị trí: Khi nhấn sẽ mở khóa bản đồ (image_e2aadf.png) */}
-                    <button 
-                      onClick={() => setIsMapLocked(false)} 
-                      className={`flex-1 py-3.5 border font-bold rounded-xl text-[15px] transition-all ${!isMapLocked ? 'bg-green-50 border-[#008b4b] text-[#008b4b]' : 'bg-white border-gray-300 text-gray-700'}`}
-                    >
+                    <button onClick={() => setIsMapLocked(false)} className={`flex-1 py-3.5 border font-bold rounded-xl text-[15px] transition-all ${!isMapLocked ? 'bg-green-50 border-[#008b4b] text-[#008b4b]' : 'bg-white border-gray-300 text-gray-700'}`}>
                       {isMapLocked ? 'Sửa địa chỉ' : '📍 Đang sửa...'}
                     </button>
-                    
                     <button onClick={finishAddAddress} disabled={isSearching} className="flex-[2] py-3.5 bg-[#008b4b] text-white font-bold rounded-xl text-[15px] flex items-center justify-center shadow-lg active:scale-95 transition-all">
                       {isSearching ? <Loader2 className="animate-spin" /> : 'Hoàn tất'}
                     </button>
@@ -425,7 +460,7 @@ export default function Header() {
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setShowLoginModal(true)} className="flex items-center space-x-1.5 p-2 rounded-lg text-sm font-medium hover:bg-[#00703c] transition-colors border border-transparent hover:border-yellow-400">
+                <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center space-x-1.5 p-2 rounded-lg text-sm font-medium hover:bg-[#00703c] transition-colors border border-transparent hover:border-yellow-400">
                   <User size={22} /><span className="hidden xl:inline uppercase tracking-tight">Đăng nhập</span>
                 </button>
               )}
@@ -438,9 +473,64 @@ export default function Header() {
         </div>
       </header>
 
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 text-gray-800">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md relative p-8"><button onClick={handleCloseModal} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full p-1.5"><X size={20} /></button><h2 className="text-2xl font-bold mb-2 text-center">Đăng nhập</h2><p className="text-sm text-gray-500 mb-6 text-center italic">Nhập số điện thoại để đồng bộ thông tin.</p><input type="tel" placeholder="Số điện thoại *" className="w-full p-4 border border-gray-200 rounded-xl mb-6 outline-none focus:border-[#008b4b] text-lg" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} /><button disabled className="w-full py-4 bg-[#008b4b] text-white font-bold rounded-xl shadow-lg uppercase tracking-wide">Tiếp tục</button></div>
+      {/* POPUP ĐĂNG NHẬP ĐÃ TÍCH HỢP QUY TRÌNH OTP THỰC TẾ */}
+      {(isLoginModalOpen || showLoginModal) && (
+        <div id="mock-login-modal" className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 text-gray-800">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md relative p-8">
+            <button onClick={handleCloseModal} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full p-1.5"><X size={20} /></button>
+            <h2 className="text-2xl font-bold mb-2 text-center">Đăng nhập</h2>
+            
+            <div id="recaptcha-container"></div>
+            
+            {loginStep === 'phone' ? (
+                <>
+                  <p className="text-sm text-gray-500 mb-6 text-center italic">Nhập số điện thoại để đồng bộ thông tin.</p>
+                  <input 
+                      type="tel" 
+                      placeholder="Số điện thoại *" 
+                      className="w-full p-4 border border-gray-200 rounded-xl mb-6 outline-none focus:border-[#008b4b] text-lg" 
+                      value={phoneNumber} 
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      onKeyDown={handlePhoneKeyDown}
+                      autoFocus
+                  />
+                  <button 
+                      onClick={handleLoginSubmit}
+                      disabled={isProcessingAuth || !phoneNumber.trim()}
+                      className="w-full py-4 bg-[#008b4b] text-white font-bold rounded-xl shadow-lg uppercase tracking-wide hover:bg-[#00703c] transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+                  >
+                      {isProcessingAuth ? <Loader2 className="animate-spin" size={24} /> : 'Tiếp tục'}
+                  </button>
+                </>
+            ) : (
+                <>
+                  <p className="text-sm text-gray-500 mb-6 text-center italic">Nhập mã OTP gồm 6 chữ số vừa được gửi đến <span className="font-bold text-gray-800">{phoneNumber}</span>.</p>
+                  <input 
+                      type="text" 
+                      placeholder="Nhập mã OTP *" 
+                      className="w-full p-4 border border-gray-200 rounded-xl mb-6 outline-none focus:border-[#008b4b] text-lg text-center tracking-[0.5em] font-bold" 
+                      value={otpCode} 
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      onKeyDown={handleOtpKeyDown}
+                      maxLength={6}
+                      autoFocus
+                  />
+                  <button 
+                      onClick={handleVerifyOtp}
+                      disabled={isProcessingAuth || otpCode.length < 6}
+                      className="w-full py-4 bg-[#008b4b] text-white font-bold rounded-xl shadow-lg uppercase tracking-wide hover:bg-[#00703c] transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
+                  >
+                      {isProcessingAuth ? <Loader2 className="animate-spin" size={24} /> : 'Xác nhận OTP'}
+                  </button>
+                  <button 
+                      onClick={() => setLoginStep('phone')}
+                      className="w-full mt-4 py-2 text-gray-500 font-medium hover:text-gray-800 transition-colors"
+                  >
+                      Quay lại đổi số điện thoại
+                  </button>
+                </>
+            )}
+          </div>
         </div>
       )}
 
