@@ -1,101 +1,92 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, Loader2, CheckCircle2, User } from 'lucide-react';
+import { ChevronLeft, Loader2, CheckCircle2, User, AlertTriangle, RefreshCw } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 // --- INITIALIZE FIREBASE ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {
-      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    };
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
+// Khởi tạo app an toàn
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+// Quan trọng: Sử dụng appId cố định để tránh lỗi path undefined
+const APP_ID = "bach-hoa-lan-hao-v1"; 
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [errorStatus, setErrorStatus] = useState(null);
 
   // Form State
   const [gender, setGender] = useState('anh');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
 
-  // 1. Khởi tạo Auth
+  // 1. Theo dõi trạng thái đăng nhập
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth Init Error:", err);
-      }
-    };
-    initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) setLoading(false);
+      if (currentUser) {
+        setUser(currentUser);
+        fetchProfile(currentUser.uid);
+      } else {
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. Tải dữ liệu Profile
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchProfile = async () => {
-      setLoading(true);
-      try {
-        // Đường dẫn cố định theo Rule 1 của hệ thống
-        const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profileInfo', 'data');
-        const profileDoc = await getDoc(profileRef);
-        
-        if (profileDoc.exists()) {
-          const data = profileDoc.data();
-          setGender(data.gender || 'anh');
-          setFullName(data.fullName || '');
-          setEmail(data.email || '');
-        }
-      } catch (error) {
-        // Nếu vẫn báo offline, có thể do cache Firestore bị lỗi, chúng ta thử lấy lại
-        console.warn("Retrying profile fetch due to connection state...");
-      } finally {
-        setLoading(false);
+  // 2. Hàm tải dữ liệu (có cơ chế bắt lỗi chi tiết)
+  const fetchProfile = async (uid) => {
+    setLoading(true);
+    setErrorStatus(null);
+    try {
+      // Kiểm tra API Key có tồn tại không
+      if (!firebaseConfig.apiKey) {
+        throw new Error("Thiếu API Key trong .env.local");
       }
-    };
 
-    fetchProfile();
-  }, [user, appId]);
+      const profileRef = doc(db, 'artifacts', APP_ID, 'users', uid, 'profileInfo', 'data');
+      const profileDoc = await getDoc(profileRef);
+      
+      if (profileDoc.exists()) {
+        const data = profileDoc.data();
+        setGender(data.gender || 'anh');
+        setFullName(data.fullName || '');
+        setEmail(data.email || '');
+      }
+    } catch (error) {
+      console.error("Lỗi Firestore:", error);
+      setErrorStatus(error.message.includes('offline') 
+        ? "Không thể kết nối máy chủ Firebase (Offline). Hãy kiểm tra file .env.local và khởi động lại npm run dev." 
+        : error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!user) {
-      alert("Bạn cần đăng nhập để lưu thông tin!");
-      return;
-    }
+    if (!user) return;
     
     setIsSaving(true);
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profileInfo', 'data'), {
+      const profileRef = doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profileInfo', 'data');
+      await setDoc(profileRef, {
         gender,
         fullName,
         email,
@@ -107,7 +98,7 @@ export default function ProfilePage() {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       console.error("Lưu thất bại:", error);
-      alert("Lỗi: Không thể kết nối với máy chủ Firebase. Vui lòng kiểm tra lại cấu hình Rules trên Console.");
+      alert("Lỗi lưu dữ liệu: " + error.message);
     } finally {
       setIsSaving(false);
     }
@@ -117,7 +108,26 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-[#f1f1f1] flex flex-col items-center justify-center -mt-4">
         <Loader2 className="animate-spin text-[#008b4b] mb-4" size={40} />
-        <p className="text-gray-500 font-medium text-[15px]">Đang kết nối hệ thống...</p>
+        <p className="text-gray-500 font-medium">Đang kiểm tra dữ liệu khách hàng...</p>
+      </div>
+    );
+  }
+
+  // Giao diện khi gặp lỗi kết nối
+  if (errorStatus) {
+    return (
+      <div className="min-h-screen bg-[#f1f1f1] flex flex-col items-center justify-center p-6 -mt-4 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-red-100 max-w-md">
+          <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-lg font-bold text-gray-800 mb-2">Lỗi kết nối Firebase</h2>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">{errorStatus}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="flex items-center justify-center w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors"
+          >
+            <RefreshCw size={18} className="mr-2" /> Thử kết nối lại
+          </button>
+        </div>
       </div>
     );
   }
@@ -127,8 +137,8 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-[#f1f1f1] flex flex-col items-center justify-center p-4 -mt-4 text-center">
         <User size={64} className="text-gray-300 mb-4" />
         <h2 className="text-xl font-bold text-gray-800 mb-2">Yêu cầu đăng nhập</h2>
-        <p className="text-gray-500 mb-6">Vui lòng đăng nhập bằng số điện thoại để sửa thông tin cá nhân.</p>
-        <button onClick={() => window.history.back()} className="bg-[#008b4b] text-white px-8 py-3 rounded-xl font-bold">Quay lại trang chủ</button>
+        <p className="text-gray-500 mb-6 italic text-sm text-gray-400">Vui lòng đăng nhập để đồng bộ thông tin cá nhân của bạn trên hệ thống.</p>
+        <button onClick={() => window.history.back()} className="bg-[#008b4b] text-white px-10 py-3 rounded-xl font-bold shadow-md">QUAY LẠI TRANG CHỦ</button>
       </div>
     );
   }
@@ -174,7 +184,7 @@ export default function ProfilePage() {
 
             {/* Họ tên */}
             <div className="relative group">
-               <label className="absolute left-4 top-2 text-[11px] font-bold text-[#008b4b] uppercase transition-colors group-focus-within:text-green-600">Họ và tên *</label>
+               <label className="absolute left-4 top-2 text-[11px] font-bold text-[#008b4b] uppercase">Họ và tên *</label>
                <input 
                   type="text" 
                   value={fullName}
@@ -185,7 +195,7 @@ export default function ProfilePage() {
                />
             </div>
 
-            {/* SĐT (Read only) */}
+            {/* SĐT */}
             <div className="relative">
                <label className="absolute left-4 top-2 text-[11px] font-bold text-gray-400 uppercase">Số điện thoại *</label>
                <input 
@@ -211,7 +221,7 @@ export default function ProfilePage() {
               <button 
                 type="submit"
                 disabled={isSaving}
-                className="w-full py-4 bg-gradient-to-r from-[#008b4b] to-[#00a85d] text-white font-bold text-[17px] rounded-xl hover:shadow-lg hover:from-[#00703c] transition-all shadow-md active:scale-[0.98] flex items-center justify-center disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none"
+                className="w-full py-4 bg-gradient-to-r from-[#008b4b] to-[#00a85d] text-white font-bold text-[17px] rounded-xl hover:shadow-lg transition-all shadow-md active:scale-[0.98] flex items-center justify-center disabled:from-gray-400 disabled:to-gray-500"
               >
                 {isSaving ? <Loader2 className="animate-spin mr-2" /> : 'Lưu chỉnh sửa'}
               </button>
