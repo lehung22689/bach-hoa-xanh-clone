@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, ShieldCheck, Ticket, Phone, ChevronRight } from 'lucide-react';
 
-// ⚠️ KHI CHẠY TRÊN VS CODE CỦA BẠN: Hãy bỏ comment dòng dưới đây và XÓA phần MOCK COMPONENT đi nhé!
+// ⚠️ KHI CHẠY TRÊN VS CODE CỦA BẠN: Hãy BỎ COMMENT 2 dòng dưới đây và XÓA phần MOCK COMPONENT đi nhé!
 import Link from 'next/link';
+import { useCart } from '@/context/CartContext';
 
 
 // Component hiển thị thẻ sản phẩm (Tốt nhất bạn nên tách cái này ra file riêng src/components/ProductCard.js trong tương lai)
@@ -81,29 +82,15 @@ const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
 
 export default function HomePage() {
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Lấy giỏ hàng từ localStorage
-  useEffect(() => {
-    const savedCart = localStorage.getItem('lanHaoCart');
-    if (savedCart) {
-      try {
-        setCart(JSON.parse(savedCart));
-      } catch (error) {
-        console.error("Lỗi đọc dữ liệu giỏ hàng:", error);
-      }
-    }
-  }, []);
-
-  // Lưu giỏ hàng
-  useEffect(() => {
-    if (cart.length > 0) {
-      localStorage.setItem('lanHaoCart', JSON.stringify(cart));
-    } else {
-      localStorage.removeItem('lanHaoCart');
-    }
-  }, [cart]);
+  // GỌI CÁC HÀM XỬ LÝ TỪ KHO CHỨA DÙNG CHUNG (Context API)
+  // Không cần khai báo useState(cart) hay useEffect(localStorage) nữa!
+  const { addToCart, removeFromCart, getProductQuantity } = useCart() || {
+    addToCart: () => {},
+    removeFromCart: () => {},
+    getProductQuantity: () => 0
+  };
 
   // Fetch sản phẩm mặc định cho trang chủ
   useEffect(() => {
@@ -116,7 +103,7 @@ export default function HomePage() {
         const consumerKey = 'ck_efbecb883c9732a5235e08233b5cf7944c46bc46';
         const consumerSecret = 'cs_f57adfdf629057a9fc5af629d48fd6e85046403f';
 
-        // Lấy 100 sản phẩm mới nhất làm data cho trang chủ, lọc bớt các trường thừa
+        // Lấy 100 sản phẩm mới nhất làm data cho trang chủ
         const apiUrl = `${wpDomain}/wp-json/wc/v3/products?per_page=100&_fields=id,name,price,regular_price,images,categories,on_sale&consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`;
         
         const response = await fetch(apiUrl);
@@ -160,29 +147,6 @@ export default function HomePage() {
     
     return () => { isMounted = false; };
   }, []);
-
-  const handleAddQuantity = (product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      }
-      return [...prev, { ...product, quantity: 1 }];
-    });
-  };
-
-  const handleRemoveQuantity = (productId) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === productId);
-      if (existing.quantity === 1) return prev.filter(item => item.id !== productId);
-      return prev.map(item => item.id === productId ? { ...item, quantity: item.quantity - 1 } : item);
-    });
-  };
-
-  const getProductQuantity = (productId) => {
-    const item = cart.find(i => i.id === productId);
-    return item ? item.quantity : 0;
-  };
 
   // --- CÁC BỘ LỌC HIỂN THỊ SẢN PHẨM TRÊN TRANG CHỦ ---
   const flashSaleProducts = products.filter(p => p.on_sale).slice(0, 5);
@@ -266,8 +230,8 @@ export default function HomePage() {
               key={product.id} 
               product={product} 
               quantity={getProductQuantity(product.id)}
-              onAdd={handleAddQuantity}
-              onRemove={handleRemoveQuantity}
+              onAdd={addToCart}           // Đã đổi thành hàm của Context
+              onRemove={removeFromCart}   // Đã đổi thành hàm của Context
             />
           ))}
         </div>
@@ -293,8 +257,8 @@ export default function HomePage() {
               key={product.id} 
               product={product} 
               quantity={getProductQuantity(product.id)}
-              onAdd={handleAddQuantity}
-              onRemove={handleRemoveQuantity}
+              onAdd={addToCart}           // Đã đổi thành hàm của Context
+              onRemove={removeFromCart}   // Đã đổi thành hàm của Context
             />
           )) : (
             <div className="col-span-full py-10 text-center text-gray-400 italic">
@@ -324,8 +288,8 @@ export default function HomePage() {
               key={product.id} 
               product={product} 
               quantity={getProductQuantity(product.id)}
-              onAdd={handleAddQuantity}
-              onRemove={handleRemoveQuantity}
+              onAdd={addToCart}           // Đã đổi thành hàm của Context
+              onRemove={removeFromCart}   // Đã đổi thành hàm của Context
             />
           )) : (
             <div className="col-span-full py-10 text-center text-gray-400 italic">

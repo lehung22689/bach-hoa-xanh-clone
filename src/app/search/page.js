@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { SearchX, Loader2 } from 'lucide-react';
 
-// --- PRODUCT CARD COMPONENT ---
+// ⚠️ KHI CHẠY TRÊN VS CODE: Hãy BỎ COMMENT 3 dòng dưới đây và XÓA phần MOCK COMPONENT đi nhé!
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useCart } from '@/context/CartContext';
+
+
+// Component thẻ sản phẩm
 const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
   const discountPercent = product.on_sale && product.regular_price > product.price
     ? Math.round(((product.regular_price - product.price) / product.regular_price) * 100) 
@@ -19,62 +23,67 @@ const ProductCard = ({ product, quantity, onAdd, onRemove }) => {
         </div>
       )}
       
-      <Link href={`/product?id=${product.id}`} className="block flex-1 flex flex-col cursor-pointer">
-        <div className="w-full aspect-square mb-3 relative overflow-hidden rounded-md bg-white border p-1">
-          <img 
-            src={product.images[0]?.src || '/api/placeholder/200/200'} 
-            alt={product.name}
-            loading="lazy"
-            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-            // Thêm xử lý lỗi ảnh nếu link từ WP bị die
-            onError={(e) => { e.target.src = 'https://via.placeholder.com/200?text=BachHoaLanHao'; }}
-          />
-        </div>
-
-        <div className="flex flex-col flex-1">
-          <h3 className="text-sm text-gray-800 font-medium line-clamp-2 min-h-[40px] mb-2 group-hover:text-[#008b4b]">
-            {product.name}
-          </h3>
-          <div className="mt-auto">
-            <div className="mb-2">
-              {product.on_sale && product.regular_price > product.price && (
-                <div className="text-xs text-gray-400 line-through mb-0.5">
-                  {product.regular_price.toLocaleString('vi-VN')}₫
-                </div>
-              )}
-              <span className="text-red-600 font-bold text-base">
-                {product.price.toLocaleString('vi-VN')}₫
-              </span>
-            </div>
-          </div>
-        </div>
+      <Link href={`/product?id=${product.id}`} className="block w-full aspect-square mb-3 relative overflow-hidden rounded-md bg-white border p-1">
+        <img 
+          src={product.images[0]?.src || '/api/placeholder/200/200'} 
+          alt={product.name}
+          loading="lazy"
+          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+        />
       </Link>
 
-      <div className="mt-2 relative z-20">
-        {quantity === 0 ? (
-          <button 
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAdd(product); }}
-            className="w-full py-2 bg-[#f0f9f4] text-[#008b4b] font-bold text-center rounded border border-transparent hover:border-[#008b4b] transition-all"
-          >
-            MUA
-          </button>
-        ) : (
-          <div className="flex items-center justify-between w-full py-1 px-2 bg-[#f0f9f4] rounded border border-[#008b4b]">
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(product.id); }}
-              className="w-8 h-8 flex items-center justify-center text-[#008b4b] text-2xl font-bold hover:bg-[#e0f0e8] rounded">-</button>
-            <span className="font-bold text-gray-800 text-lg">{quantity}</span>
-            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAdd(product); }}
-              className="w-8 h-8 flex items-center justify-center text-[#008b4b] text-2xl font-bold hover:bg-[#e0f0e8] rounded">+</button>
+      <div className="flex flex-col flex-1">
+        <Link href={`/product?id=${product.id}`}>
+          <h3 className="text-sm text-gray-800 font-medium line-clamp-2 min-h-[40px] mb-2 hover:text-green-600 cursor-pointer">
+            {product.name}
+          </h3>
+        </Link>
+        
+        <div className="mt-auto flex flex-col">
+          <div className="mb-2">
+            {product.on_sale && product.regular_price > product.price && (
+              <div className="text-xs text-gray-400 line-through mb-0.5">
+                {product.regular_price.toLocaleString('vi-VN')}₫
+              </div>
+            )}
+            <span className="text-red-600 font-bold text-base">
+              {product.price.toLocaleString('vi-VN')}₫
+            </span>
           </div>
-        )}
+
+          {quantity === 0 ? (
+            <button 
+              onClick={() => onAdd(product)}
+              className="w-full py-2 bg-[#f0f9f4] text-[#008b4b] font-bold text-center rounded border border-transparent hover:border-[#008b4b] transition-all"
+            >
+              MUA
+            </button>
+          ) : (
+            <div className="flex items-center justify-between w-full py-1 px-2 bg-[#f0f9f4] rounded border border-[#008b4b]">
+              <button 
+                onClick={() => onRemove(product.id)}
+                className="w-8 h-8 flex items-center justify-center text-[#008b4b] text-2xl font-bold hover:bg-[#e0f0e8] rounded"
+              >
+                -
+              </button>
+              <span className="font-bold text-gray-800 text-lg">{quantity}</span>
+              <button 
+                onClick={() => onAdd(product)}
+                className="w-8 h-8 flex items-center justify-center text-[#008b4b] text-2xl font-bold hover:bg-[#e0f0e8] rounded"
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
-// --- SEARCH CONTENT ---
 function SearchContent() {
   const searchParams = useSearchParams();
+  
   const [allFetchedProducts, setAllFetchedProducts] = useState([]); 
   const [visibleCount, setVisibleCount] = useState(20);             
   const [nextOffset, setNextOffset] = useState(0);             
@@ -82,28 +91,24 @@ function SearchContent() {
   const [isFetching, setIsFetching] = useState(false);              
   const [isFirstLoad, setIsFirstLoad] = useState(true);             
   const [totalCount, setTotalCount] = useState(0);                  
-  const [cart, setCart] = useState([]);
+  
   const [searchTitle, setSearchTitle] = useState('');
   const [currentQuery, setCurrentQuery] = useState({ q: '', categorySlug: '', onSale: '' });
 
   const isFetchingRef = useRef(false);
 
-  // Load giỏ hàng
-  useEffect(() => {
-    const savedCart = localStorage.getItem('lanHaoCart');
-    if (savedCart) { try { setCart(JSON.parse(savedCart)); } catch (e) {} }
-  }, []);
+  // GỌI CÁC HÀM XỬ LÝ TỪ KHO CHỨA DÙNG CHUNG (Context API)
+  const { addToCart, removeFromCart, getProductQuantity } = useCart() || {
+    addToCart: () => {},
+    removeFromCart: () => {},
+    getProductQuantity: () => 0
+  };
 
-  useEffect(() => {
-    if (cart.length > 0) { localStorage.setItem('lanHaoCart', JSON.stringify(cart)); } 
-    else { localStorage.removeItem('lanHaoCart'); }
-  }, [cart]);
-
-  // Fetch API
   const fetchProductsFromAPI = async (q, categorySlug, onSale, limit, offset) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     setIsFetching(true);
+    
     if (offset === 0) setIsFirstLoad(true);
     
     try {
@@ -116,113 +121,191 @@ function SearchContent() {
       if (onSale) {
         apiUrl += `&on_sale=true`;
         if (offset === 0) setSearchTitle('Sản phẩm Khuyến mãi');
-      } else if (categorySlug) {
+      } 
+      else if (categorySlug) {
         const catUrl = `${wpDomain}/wp-json/wc/v3/products/categories?slug=${categorySlug}&_fields=id,name&consumer_key=${consumerKey}&consumer_secret=${consumerSecret}`;
         const catRes = await fetch(catUrl);
         const catData = await catRes.json();
+        
         if (Array.isArray(catData) && catData.length > 0) {
            apiUrl += `&category=${catData[0].id}`;
            if (offset === 0) setSearchTitle(`Danh mục: ${catData[0].name}`);
+        } else {
+           if (offset === 0) setSearchTitle(`Danh mục: ${categorySlug}`);
         }
-      } else if (q) {
+      } 
+      else if (q && q.trim() !== '') {
         apiUrl += `&search=${encodeURIComponent(q)}`;
-        if (offset === 0) setSearchTitle(`Tìm kiếm: "${q}"`);
+        if (offset === 0) setSearchTitle(`Kết quả tìm kiếm: "${q}"`);
       } else {
         if (offset === 0) setSearchTitle('Tất cả sản phẩm');
       }
 
       const response = await fetch(apiUrl);
+      
       const totalHeader = response.headers.get('X-WP-Total');
-      if (totalHeader && offset === 0) setTotalCount(parseInt(totalHeader));
+      if (totalHeader && offset === 0) {
+          setTotalCount(parseInt(totalHeader));
+      }
 
       const data = await response.json();
+      
       if (Array.isArray(data)) {
-        const formatted = data.map(item => ({
-          id: item.id, name: item.name,
+        const formattedProducts = data.map(item => ({
+          id: item.id,
+          name: item.name,
           price: item.price ? parseInt(item.price) : 0,
           regular_price: item.regular_price ? parseInt(item.regular_price) : 0,
           images: item.images || [],
+          categories: item.categories || [],
           on_sale: item.on_sale || false,
         }));
-        setAllFetchedProducts(prev => offset === 0 ? formatted : [...prev, ...formatted]);
+        
+        const uniqueFormattedProducts = formattedProducts.filter((item, index, self) =>
+          index === self.findIndex((t) => t.id === item.id)
+        );
+
+        setAllFetchedProducts(prev => {
+           if (offset === 0) return uniqueFormattedProducts;
+           const existingIds = new Set(prev.map(item => item.id));
+           const uniqueNewProducts = uniqueFormattedProducts.filter(item => !existingIds.has(item.id));
+           return [...prev, ...uniqueNewProducts];
+        });
+        
         setHasMore(data.length === limit); 
         setNextOffset(offset + data.length);
+      } else {
+         throw new Error("Không lấy được dữ liệu");
       }
-    } catch (e) { console.error(e); } 
-    finally { setIsFetching(false); isFetchingRef.current = false; setIsFirstLoad(false); }
+    } catch (error) {
+      console.log("Lỗi tải sản phẩm:", error.message);
+    } finally {
+      setIsFetching(false);
+      isFetchingRef.current = false; 
+      setIsFirstLoad(false);
+    }
   };
 
   useEffect(() => {
     const q = searchParams.get('q') || '';
     const categorySlug = searchParams.get('categorySlug') || '';
     const onSale = searchParams.get('on_sale') || '';
+    
     setCurrentQuery({ q, categorySlug, onSale });
-    setAllFetchedProducts([]); setNextOffset(0); setHasMore(true);
+    setAllFetchedProducts([]);
+    setVisibleCount(20);
+    setNextOffset(0);
+    setHasMore(true);
+    
     fetchProductsFromAPI(q, categorySlug, onSale, 20, 0);
   }, [searchParams]);
 
-  // Infinite Scroll logic... (giữ nguyên như cũ)
+  useEffect(() => {
+    if (isFirstLoad || !hasMore || isFetchingRef.current) return;
 
-  const handleAddQuantity = (product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...prev, { ...product, quantity: 1 }];
-    });
-  };
+    const bufferRemaining = allFetchedProducts.length - visibleCount;
+    
+    if (bufferRemaining <= 40) {
+       fetchProductsFromAPI(currentQuery.q, currentQuery.categorySlug, currentQuery.onSale, 100, nextOffset);
+    }
+  }, [allFetchedProducts.length, visibleCount, hasMore, isFirstLoad, currentQuery, nextOffset]);
 
-  const handleRemoveQuantity = (productId) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === productId);
-      if (existing && existing.quantity === 1) return prev.filter(item => item.id !== productId);
-      return prev.map(item => item.id === productId ? { ...item, quantity: item.quantity - 1 } : item);
-    });
-  };
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.innerHeight + window.scrollY;
+      const threshold = document.documentElement.scrollHeight - 200;
+      
+      if (scrollPosition >= threshold) {
+        setVisibleCount(prev => {
+          if (prev >= allFetchedProducts.length) return prev;
+          return prev + 20; 
+        });
+      }
+    };
 
-  // QUAN TRỌNG: Chỉ trả về nội dung bên trong <main>, không gọi Header/Sidebar/Layout nữa
+    let scrollTimeout;
+    const throttledScroll = () => {
+      if (!scrollTimeout) {
+        scrollTimeout = setTimeout(() => {
+          handleScroll();
+          scrollTimeout = null;
+        }, 100);
+      }
+    };
+
+    window.addEventListener('scroll', throttledScroll);
+    return () => {
+       window.removeEventListener('scroll', throttledScroll);
+       if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
+  }, [allFetchedProducts.length]);
+
+  const displayedProducts = allFetchedProducts.slice(0, visibleCount);
+  const isShowingSpinner = isFetching && visibleCount >= allFetchedProducts.length;
+
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-[#008b4b]">
-      <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-        <h2 className="text-xl font-bold text-gray-800">
-          <span className="text-[#008b4b] mr-2">{searchTitle}</span>
-        </h2>
-        <span className="text-sm text-gray-500">
-          {allFetchedProducts.length} / {totalCount || allFetchedProducts.length} sản phẩm
-        </span>
+    <>
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border-t-4 border-[#008b4b]">
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center">
+              <span className="text-[#008b4b] mr-2">{searchTitle}</span>
+          </h2>
+          <span className="text-sm text-gray-500">
+            Hiển thị {displayedProducts.length} / {totalCount || displayedProducts.length} sản phẩm
+          </span>
+        </div>
+        
+        <div className="p-4">
+          {isFirstLoad ? (
+            <div className="py-10 flex flex-col items-center justify-center text-gray-400">
+                <Loader2 size={32} className="animate-spin text-[#008b4b] mb-4" />
+                <p className="italic">Hệ thống đang kết nối dữ liệu...</p>
+            </div>
+          ) : displayedProducts.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {displayedProducts.map(product => (
+                  <ProductCard 
+                    key={product.id} 
+                    product={product} 
+                    quantity={getProductQuantity(product.id)}
+                    onAdd={addToCart}           // Đã đổi sang hàm của Context API
+                    onRemove={removeFromCart}   // Đã đổi sang hàm của Context API
+                  />
+                ))}
+              </div>
+              
+              {isShowingSpinner && (
+                <div className="pt-8 pb-4 flex justify-center w-full col-span-full">
+                  <Loader2 className="animate-spin text-[#008b4b]" size={28} />
+                </div>
+              )}
+              
+              {!hasMore && displayedProducts.length === allFetchedProducts.length && (
+                  <div className="pt-8 pb-2 text-center text-gray-400 text-sm">
+                    Bạn đã xem hết sản phẩm trong danh mục này.
+                  </div>
+              )}
+            </>
+          ) : (
+            <div className="py-16 flex flex-col items-center justify-center text-center">
+              <SearchX size={64} className="text-gray-300 mb-4" />
+              <h3 className="text-lg font-bold text-gray-800 mb-2">Không có sản phẩm nào</h3>
+              <p className="text-gray-500 text-sm">Danh mục này hiện chưa có sản phẩm.</p>
+              <Link href="/" className="mt-6 px-6 py-2 bg-[#008b4b] text-white font-bold rounded-full hover:bg-[#00703c] transition-colors">
+                Quay lại trang chủ
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
-
-      <div className="p-4">
-        {isFirstLoad ? (
-          <div className="py-20 flex flex-col items-center justify-center text-gray-400">
-            <Loader2 size={40} className="animate-spin text-[#008b4b] mb-4" />
-            <p>Đang tải sản phẩm Bách Hóa Lan Hảo...</p>
-          </div>
-        ) : allFetchedProducts.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {allFetchedProducts.slice(0, visibleCount).map(product => (
-              <ProductCard 
-                key={product.id} 
-                product={product} 
-                quantity={cart.find(i => i.id === product.id)?.quantity || 0}
-                onAdd={handleAddQuantity} 
-                onRemove={handleRemoveQuantity} 
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="py-20 flex flex-col items-center justify-center">
-            <SearchX size={60} className="text-gray-200 mb-4" />
-            <p className="text-gray-500">Không tìm thấy sản phẩm nào.</p>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="p-10 text-center">Đang tải...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#f1f1f1] flex items-center justify-center"><Loader2 className="animate-spin text-[#008b4b]" size={32} /></div>}>
       <SearchContent />
     </Suspense>
   );
