@@ -11,7 +11,7 @@ import {
 import Link from 'next/link';
 import { useCart } from '@/context/CartContext';
 import { getFirestore, collection, addDoc, onSnapshot } from "firebase/firestore";
-
+import rawData from './stock_ql1k.json';
 
 
 // ID cửa hàng để đối chiếu kho
@@ -25,7 +25,7 @@ const mockStores = [
 
 export default function CartPage() {
   const { 
-    cart: cartItems, user, profile, addToCart, removeFromCart, 
+    cart: cartItems, user, profile, addToCart, removeFromCart, removeItem,
     clearCart, isLoaded, setShowAddressModal, addresses, selectedAddressId
   } = useCart();
 
@@ -38,6 +38,10 @@ export default function CartPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pollingStatus, setPollingStatus] = useState(false);
 
+  // --- STATE POPUP XÓA SẢN PHẨM ---
+  const [deleteConfirmInfo, setDeleteConfirmInfo] = useState({ isOpen: false, itemId: null });
+  const [skipDeleteConfirm, setSkipDeleteConfirm] = useState(false);
+
   // --- STATE TỒN KHO 8000 SKU ---
   const [branchInventoryMap, setBranchInventoryMap] = useState({});
   const [isLoadingStock, setIsLoadingStock] = useState(false);
@@ -46,28 +50,36 @@ export default function CartPage() {
   const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const pollingTimerRef = useRef(null);
 
-  // --- 1. TẢI BẢNG TỒN KHO CHI NHÁNH QUỐC LỘ 1K ---
+  // 1. Tải tùy chọn bỏ qua cảnh báo xóa (nếu có)
   useEffect(() => {
-    const fetchBranchStock = async () => {
+    const skip = localStorage.getItem('skipDeleteConfirm');
+    if (skip === 'true') setSkipDeleteConfirm(true);
+  }, []);
+
+  // --- 1. ĐỌC BẢNG TỒN KHO TRỰC TIẾP TỪ FILE IMPORT ---
+  useEffect(() => {
+    if (deliveryMethod === 'store' && selectedStoreId === STORE_QL1K_ID) {
       setIsLoadingStock(true);
       try {
-        const res = await fetch('https://bachhoalanhao.com/stock_ql1k.json');
-        const rawData = await res.json();
+        // Không cần dùng fetch() nữa vì dữ liệu rawData đã được import sẵn ở đầu file
         const inventoryMap = rawData.reduce((acc, item) => {
-          const sku = item["Mã hàng"];
-          const qtyString = (item["Tồn kho"] || "0").toString().replace(',', '.');
+          const sku = item["A"];
+          const qtyString = (item["B"] || "0").toString().replace(',', '.');
+          
+          // Bỏ qua nếu dòng đó trống hoặc là tiêu đề
+          if (!sku || sku === "Mã hàng") return acc; 
+          
           acc[sku] = parseFloat(qtyString);
           return acc;
         }, {});
+        
         setBranchInventoryMap(inventoryMap);
       } catch (e) {
-        console.error("Lỗi tải bảng tồn kho:", e);
+        console.error("Lỗi xử lý bảng tồn kho:", e.message);
+        setBranchInventoryMap({});
       } finally {
         setIsLoadingStock(false);
       }
-    };
-    if (deliveryMethod === 'store' && selectedStoreId === STORE_QL1K_ID) {
-        fetchBranchStock();
     }
   }, [deliveryMethod, selectedStoreId]);
 
@@ -82,6 +94,39 @@ export default function CartPage() {
     return true;
   };
   const unavailableItems = cartItems.filter(item => !checkAvailability(item));
+
+  // --- LOGIC XỬ LÝ XÓA & TĂNG GIẢM SỐ LƯỢNG ---
+  const handleDecreaseClick = (item) => {
+    if (item.quantity === 1) {
+      if (skipDeleteConfirm) {
+        removeItem(item.id);
+      } else {
+        setDeleteConfirmInfo({ isOpen: true, itemId: item.id });
+      }
+    } else {
+      removeFromCart(item.id);
+    }
+  };
+
+  const handleRemoveClick = (itemId) => {
+    if (skipDeleteConfirm) {
+      removeItem(itemId);
+    } else {
+      setDeleteConfirmInfo({ isOpen: true, itemId: itemId });
+    }
+  };
+
+  const confirmDelete = () => {
+    const checkbox = document.getElementById('dont-ask-again');
+    if (checkbox && checkbox.checked) {
+      localStorage.setItem('skipDeleteConfirm', 'true');
+      setSkipDeleteConfirm(true);
+    }
+    if (deleteConfirmInfo.itemId) {
+       removeItem(deleteConfirmInfo.itemId);
+    }
+    setDeleteConfirmInfo({ isOpen: false, itemId: null });
+  };
 
   // --- 3. LOGIC SEPAY POLLING ---
   useEffect(() => {
@@ -193,20 +238,70 @@ export default function CartPage() {
           </div>
 
           <div className="bg-white rounded-xl p-4 shadow-sm">
-            <h3 className="font-bold text-sm mb-3">Sản phẩm đã chọn</h3>
-            <div className="divide-y divide-gray-50">
+            <div className="flex justify-between items-center mb-3">
+               <h3 className="font-bold text-[15px] flex items-center">
+                 <ShoppingCart size={16} className="mr-2" /> Sản phẩm đã chọn
+               </h3>
+               <span className="text-sm font-medium text-gray-500">{cartItems.length} món</span>
+            </div>
+            
+            <div className="divide-y divide-gray-100">
               {cartItems.map(item => {
                 const isAvailable = checkAvailability(item);
                 return (
-                  <div key={item.id} className="py-4">
-                    <div className="flex">
-                      <img src={item.images[0]?.src} className="w-16 h-16 object-contain border rounded p-1" />
-                      <div className="ml-3 flex-1">
-                        <h4 className="text-sm font-medium leading-tight">{item.name}</h4>
-                        <p className="text-[10px] text-gray-400 mt-1 uppercase">SKU: {item.sku}</p>
-                        <p className="text-red-600 font-bold mt-1 text-sm">{item.price.toLocaleString()}₫</p>
-                        {!isAvailable && <div className="mt-2 bg-red-50 text-red-600 p-2 rounded-lg border border-red-100 flex items-start"><AlertCircle size={14} className="mr-1.5 mt-0.5 flex-shrink-0" /><p className="text-[11px] font-bold">Hết hàng tại chi nhánh này.</p></div>}
+                  <div key={item.id} className="py-4 relative">
+                    <div className="flex gap-3">
+                      {/* KHUNG HÌNH ẢNH & NÚT XÓA GÓC (image_fee5e2.png) */}
+                      <div className="relative w-20 h-20 flex-shrink-0 border border-gray-200 rounded-lg p-1.5 bg-white flex items-center justify-center">
+                        <button 
+                          onClick={() => handleRemoveClick(item.id)}
+                          className="absolute -top-2 -left-2 bg-[#e2e8f0] text-gray-500 rounded-full p-1 hover:bg-gray-300 transition-colors z-10"
+                        >
+                          <X size={12} strokeWidth={3} />
+                        </button>
+                        <img src={item.images[0]?.src || '/api/placeholder/150/150'} className="w-full h-full object-contain" alt={item.name} />
                       </div>
+
+                      {/* THÔNG TIN SẢN PHẨM & NÚT TĂNG GIẢM */}
+                      <div className="flex-1 flex flex-col justify-between min-w-0">
+                        <div className="flex justify-between gap-2">
+                           <div className="flex flex-col gap-1 pr-2">
+                              <h4 className="text-[14px] font-medium leading-snug text-gray-800 line-clamp-2">{item.name}</h4>
+                              {/* Badge Dành riêng cho bạn */}
+                              <div>
+                                <span className="bg-yellow-400 text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded">Dành riêng cho bạn</span>
+                              </div>
+                           </div>
+                           
+                           {/* Giá tiền cân phải */}
+                           <div className="flex flex-col items-end flex-shrink-0">
+                              <span className="text-gray-800 font-bold text-[15px]">{(item.price * item.quantity).toLocaleString()}₫</span>
+{item.regular_price > item.price && (
+  <span className="text-gray-400 line-through text-[12px]">{(item.regular_price * item.quantity).toLocaleString()}₫</span>
+)}
+                           </div>
+                        </div>
+
+                        <div className="flex justify-between items-end mt-2">
+                           {/* Cảnh báo tồn kho */}
+                           <div className="flex-1">
+                              {!isAvailable && (
+                                <div className="bg-red-50 text-red-600 p-1.5 rounded border border-red-100 flex items-start w-fit max-w-[85%]">
+                                  <AlertCircle size={12} className="mr-1 mt-0.5 flex-shrink-0" />
+                                  <p className="text-[10px] font-bold leading-tight">Hết hàng tại chi nhánh.</p>
+                                </div>
+                              )}
+                           </div>
+                           
+                           {/* Nút Tăng giảm số lượng (image_fee5e2.png) */}
+                           <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden h-8 flex-shrink-0">
+                              <button onClick={() => handleDecreaseClick(item)} className="w-8 h-full flex items-center justify-center font-bold text-gray-600 hover:bg-gray-200 transition-colors">-</button>
+                              <span className="text-[13px] font-bold w-6 text-center bg-white h-full flex items-center justify-center border-x border-gray-200">{item.quantity}</span>
+                              <button onClick={() => addToCart(item)} className="w-8 h-full flex items-center justify-center font-bold text-gray-600 hover:bg-gray-200 transition-colors">+</button>
+                           </div>
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                 );
@@ -234,7 +329,7 @@ export default function CartPage() {
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 bg-white p-4 border-t z-40 shadow-lg">
+          <div className="fixed bottom-0 left-0 right-0 bg-white p-4 border-t z-40 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
             <div className="max-w-3xl mx-auto flex justify-between items-center">
               <div className="flex flex-col"><p className="text-xs text-gray-400 uppercase font-medium">Tổng thanh toán</p><p className="text-xl font-bold text-red-600">{totalAmount.toLocaleString()}₫</p></div>
               <button onClick={handleCheckout} disabled={isSubmitting || (deliveryMethod === 'store' && unavailableItems.length > 0)} className={`px-10 py-3.5 rounded-xl font-bold uppercase transition-all shadow-md flex items-center ${ (deliveryMethod === 'store' && unavailableItems.length > 0) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-yellow-400 text-green-900 active:scale-95' }`}>{isSubmitting ? <Loader2 className="animate-spin" size={20} /> : 'ĐẶT HÀNG'}</button>
@@ -242,7 +337,6 @@ export default function CartPage() {
           </div>
         </main>
       ) : orderStep === 'payment' ? (
-        /* 💳 MÀN HÌNH QUÉT MÃ QR (ĐÃ CẬP NHẬT THEO YÊU CẦU) */
         <main className="max-w-3xl mx-auto px-4 mt-6 flex flex-col items-center">
             <div className="bg-white rounded-3xl shadow-xl p-6 w-full max-w-sm text-center border-t-8 border-[#008b4b]">
                 <div className="flex items-center justify-center mb-4 space-x-2 text-[#008b4b]"><QrCode size={24} /><h2 className="text-lg font-bold uppercase">Thanh toán chuyển khoản</h2></div>
@@ -277,6 +371,48 @@ export default function CartPage() {
              <div className="flex flex-col gap-3 w-full max-w-sm mt-10"><Link href="/orders" className="bg-white border-2 border-[#008b4b] text-[#008b4b] py-4 rounded-xl font-bold uppercase shadow-sm">Xem lịch sử đơn hàng</Link><Link href="/" className="bg-[#008b4b] text-white py-4 rounded-xl font-bold uppercase shadow-lg">Tiếp tục mua sắm</Link></div>
         </div>
       )}
+
+      {/* POPUP XÁC NHẬN XÓA SẢN PHẨM (image_fee902.png) */}
+      {deleteConfirmInfo.isOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[120] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col items-center">
+            
+            <div className="w-14 h-14 mb-3 flex items-center justify-center text-[#008b4b]">
+               <Trash2 size={48} strokeWidth={1.5} />
+            </div>
+            
+            <h3 className="text-[17px] font-medium text-gray-800 mb-6 text-center">Bạn có muốn xóa sản phẩm</h3>
+            
+            <label className="flex items-center self-start mb-6 cursor-pointer group">
+              <div className="relative flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="dont-ask-again" 
+                  className="peer appearance-none w-5 h-5 border border-gray-300 rounded checked:bg-white checked:border-[#008b4b] transition-colors cursor-pointer" 
+                />
+                <Check size={14} strokeWidth={3} className="absolute left-0.5 top-0.5 text-[#008b4b] opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
+              </div>
+              <span className="ml-2.5 text-[15px] text-gray-600 group-hover:text-gray-800 transition-colors">Không hỏi lại cho lần sau</span>
+            </label>
+
+            <div className="flex w-full gap-3">
+              <button 
+                onClick={() => setDeleteConfirmInfo({ isOpen: false, itemId: null })} 
+                className="flex-1 py-3 bg-[#f1f2f6] text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors text-[15px]"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={confirmDelete} 
+                className="flex-1 py-3 bg-[#008b4b] text-white font-medium rounded-lg hover:bg-[#00703c] transition-colors text-[15px] shadow-sm"
+              >
+                Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
